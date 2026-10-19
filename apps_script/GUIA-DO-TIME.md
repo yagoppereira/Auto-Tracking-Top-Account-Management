@@ -96,8 +96,9 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Opção | Mostra |
 |---|---|
 | Todas as NFs | Tira o filtro |
-| Pendentes de pagamento | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
-| Pendentes vencidos | Os de cima com vencimento já passado |
+| Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
+| Pendentes entregues | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
+| Pendentes entregues em atraso | Os de cima com vencimento já passado |
 | Aguardando a Emissão | Em aberto com entrega ainda não confirmada (a validar, aguardando, problema ou em branco) |
 | Pagos | Todas as NFs com status Pago |
 | Pagos no período | Pagas entre as datas de **E1** ("de") e **F1** ("até"), pela data de pagamento (coluna L). Sem datas, usa o mês atual. Mudou a data, o filtro se refaz |
@@ -118,8 +119,9 @@ Cuidados:
 - **Emissão**: filtro **Aguardando a Emissão**. Para cada NF, atualize o
   status de entrega (P). Quando a NF assinada chegar, marque **NF assinada
   recebida** e informe a data (Q). Detalhes vão em Obs. Emissão (R).
-- **Financeiro**: filtro **Pendentes de pagamento vencidos** para cobrar a
-  Vibra, e **Pagos no período** para conferir os recebimentos. Anotações em
+- **Financeiro**: filtro **Pendentes entregues em atraso** para cobrar a
+  Vibra, **Pendentes de pagamento** para a visão de tudo que está em aberto e
+  **Pagos no período** para conferir os recebimentos. Anotações em
   Obs. financeiro (S).
 
 ## Dúvidas comuns

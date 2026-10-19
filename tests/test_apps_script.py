@@ -145,14 +145,16 @@ def test_filtros_contam_as_nfs_de_cada_condicao():
     saida = _filtros()
     contagem = {opcao: r["resumo"]["nfs"] for opcao, r in saida.items()}
     assert contagem == {
-        "pendentes_pagamento": 3,       # 1, 2 e 10: em aberto/parcial com entrega concluída ou não se aplica
-        "pendentes_vencidos": 1,        # só a 1 tem dias em atraso
+        "pendentes_pagamento": 4,       # 1, 2, 3 e 10: todo título em aberto ou pago em parte
+        "pendentes_entregues": 3,       # 1, 2 e 10: com entrega concluída ou não se aplica
+        "pendentes_entregues_atraso": 1,  # só a 1 tem dias em atraso
         "aguardando_emissao": 2,        # 3 (a validar) e 4 (sem título, entrega em branco)
         "pagos": 3,
         "pagos_periodo": 2,             # 08/09 e 30/09 (o fim do período entra); 01/10 fica fora
         "encerradas_sem_pagamento": 2,  # devolvida e cancelada
     }
-    assert saida["pendentes_pagamento"]["resumo"] == {"nfs": 3, "valor": 400, "saldo": 350}
+    assert saida["pendentes_pagamento"]["resumo"] == {"nfs": 4, "valor": 500, "saldo": 450}
+    assert saida["pendentes_entregues"]["resumo"] == {"nfs": 3, "valor": 400, "saldo": 350}
 
 
 def test_formula_do_filtro_usa_as_colunas_do_layout_e_nao_depende_da_localidade():
@@ -164,7 +166,7 @@ def test_formula_do_filtro_usa_as_colunas_do_layout_e_nao_depende_da_localidade(
     # lógico sozinho comparado com número: FALSO>0 é VERDADEIRO na planilha
     # (lógico é maior que número) e passava tudo. O +0 e o *1 viram 1/0.
     assert saida["pagos"]["formula"] == f'=(((${k}3="Pago")+0>0)*1)>0'
-    assert saida["pendentes_pagamento"]["formula"] == (
+    assert saida["pendentes_entregues"]["formula"] == (
         f'=(((${k}3="Em aberto")+(${k}3="Pago parcial")+0>0)'
         f'*((${p}3="NF assinada recebida")+(${p}3="Não se aplica")+0>0)*1)>0')
     for resultado in saida.values():

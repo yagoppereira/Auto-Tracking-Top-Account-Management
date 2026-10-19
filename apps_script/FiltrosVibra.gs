@@ -26,15 +26,20 @@ const ENTREGA_CONCLUIDA = ['NF assinada recebida', 'Não se aplica'];
 const FILTROS_VIBRA = {
   pendentes_pagamento: {
     rotulo: 'Pendentes de pagamento',
-    titulo: 'Pendentes de pagamento (entregue ou não se aplica)',
+    titulo: 'Pendentes de pagamento (todos os títulos em aberto)',
+    condicoes: () => [{ coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] }],
+  },
+  pendentes_entregues: {
+    rotulo: 'Pendentes entregues',
+    titulo: 'Pendentes de pagamento entregues (ou não se aplica)',
     condicoes: () => [
       { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
       { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
     ],
   },
-  pendentes_vencidos: {
-    rotulo: 'Pendentes vencidos',
-    titulo: 'Pendentes de pagamento e vencidos',
+  pendentes_entregues_atraso: {
+    rotulo: 'Pendentes entregues em atraso',
+    titulo: 'Pendentes de pagamento entregues e vencidos',
     condicoes: () => [
       { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
       { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
@@ -378,8 +383,10 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 <body>
   <h3>Financeiro</h3>
   <button class="filtro" onclick="aplicar('pendentes_pagamento')">Pendentes de pagamento
-    <small>Em aberto ou pago parcial, com entrega confirmada (NF assinada recebida) ou não se aplica</small></button>
-  <button class="filtro" onclick="aplicar('pendentes_vencidos')">Pendentes de pagamento vencidos
+    <small>Todos os títulos em aberto ou pagos em parte</small></button>
+  <button class="filtro" onclick="aplicar('pendentes_entregues')">Pendentes entregues
+    <small>Em aberto com entrega confirmada (NF assinada recebida) ou não se aplica: já podem ser cobrados</small></button>
+  <button class="filtro" onclick="aplicar('pendentes_entregues_atraso')">Pendentes entregues em atraso
     <small>Os de cima com vencimento já passado</small></button>
   <button class="filtro" onclick="aplicar('pagos')">Pagos
     <small>Todos com status financeiro Pago</small></button>

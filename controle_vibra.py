@@ -119,8 +119,9 @@ COLUNAS = COLUNAS_DW + [COLUNA_CLIENTE_FINAL] + COLUNAS_MANUAIS + COLUNAS_FORMUL
 # filtro rápido na linha 1 (congelada, fica sempre à vista): lista em A1:D1
 # e período em E1 / F1. Quem aplica é o onEdit do apps_script/FiltrosVibra.gs;
 # os rótulos têm que ser os mesmos de lá (conferido em tests/test_apps_script.py)
-OPCOES_FILTRO_RAPIDO = ["Todas as NFs", "Pendentes de pagamento", "Pendentes vencidos", "Aguardando a Emissão",
-                        "Pagos", "Pagos no período", "Canceladas / devolvidas"]
+OPCOES_FILTRO_RAPIDO = ["Todas as NFs", "Pendentes de pagamento", "Pendentes entregues",
+                        "Pendentes entregues em atraso", "Aguardando a Emissão", "Pagos", "Pagos no período",
+                        "Canceladas / devolvidas"]
 COLUNAS_FILTRO_RAPIDO = 4          # A a D, mescladas
 COLUNA_PERIODO_DE = 4              # E
 COLUNA_PERIODO_ATE = 5             # F
