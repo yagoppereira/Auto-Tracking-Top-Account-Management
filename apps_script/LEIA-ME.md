@@ -22,9 +22,9 @@ service account: basta a pessoa conseguir rodar consultas no projeto
 4. Salve, escolha a função `atualizarControleVibra` e clique em **Executar**.
    Na primeira vez o Google pede autorização (planilha e BigQuery).
 5. Recarregue a planilha: aparece o menu **Controle Vibra**.
-6. **Controle Vibra > Criar filtro rápido na linha 1** monta a lista de
-   filtros em A1 e as datas do período em E1 / F1 (o extrator em Python
-   também monta ao reformatar a aba). Se o item não aparece no menu, o
+6. **Controle Vibra > Criar filtro rápido e botão na linha 1** monta a lista
+   de filtros em A1, as datas do período em E1 / F1 e o botão amarelo do
+   painel em G1 (o extrator em Python monta a linha 1, mas não o botão). Se o item não aparece no menu, o
    `ControleVibra.gs` colado é anterior aos filtros: cole o atual e recarregue.
 
 ## Usar
@@ -48,8 +48,9 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   planilha aberta; **Todas as NFs** tira o filtro.
 - **Controle Vibra > Filtros**: painel lateral com os mesmos filtros, atalhos
   de período e o resumo (NFs, valor e saldo).
-- O botão de imagem da versão anterior foi abandonado: imagem sobre a linha
-  congelada não aparecia. **Criar filtro rápido na linha 1** apaga esse botão.
+- **Botão amarelo "Filtrar NFs"** (começo da faixa verde, em G1): abre o
+  mesmo painel. É imagem com script: só funciona no navegador do computador.
+  Para mover sem acionar, clique com o botão direito (só seleciona) e arraste.
 
 O script só grava valores: a formatação, as listas suspensas e as fórmulas das
 colunas O, T e U (linha 2) já estão na planilha. Para refazer a formatação do

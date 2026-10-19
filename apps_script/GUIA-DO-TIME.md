@@ -104,15 +104,18 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Pagos no período | Pagas entre as datas de **E1** ("de") e **F1** ("até"), pela data de pagamento (coluna L). Sem datas, usa o mês atual. Mudou a data, o filtro se refaz |
 | Canceladas / devolvidas | Canceladas, devolvidas, abatidas e baixas por perda |
 
-**Painel:** o menu **Controle Vibra > Filtros** abre um painel à direita com
+**Painel:** o botão amarelo **Filtrar NFs**, no começo da faixa verde da
+linha 1, ou o menu **Controle Vibra > Filtros** abre um painel à direita com
 os mesmos filtros, atalhos de período (este mês, mês passado, últimos 30 dias,
 este ano) e o resumo de quantidade, valor e saldo em aberto.
 
 Cuidados:
 - O filtro vale **para todo mundo** que está com a planilha aberta. Ao
   terminar, volte a lista de A1 para **Todas as NFs**.
-- Na primeira vez que alguém abre o painel pelo menu, o Google pede
+- Na primeira vez que alguém abre o painel (botão ou menu), o Google pede
   autorização para o script. É só aceitar (o filtro rápido de A1 não pede).
+- O botão amarelo só funciona no navegador do computador. No celular, use a
+  lista de A1.
 
 ## Rotina sugerida
 

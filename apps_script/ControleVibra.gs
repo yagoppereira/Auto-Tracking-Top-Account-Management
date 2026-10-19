@@ -188,7 +188,7 @@ function onOpen() {
     .addItem('Agendar atualização diária', 'agendarAtualizacaoDiaria')
     .addItem('Remover agendamento', 'removerAgendamento')
     .addSeparator()
-    .addItem('Criar filtro rápido na linha 1', 'criarFiltroRapido')
+    .addItem('Criar filtro rápido e botão na linha 1', 'criarFiltroRapido')
     .addToUi();
 }
 

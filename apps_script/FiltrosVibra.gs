@@ -5,10 +5,12 @@
  * - Filtro rápido na linha 1, que é congelada e fica sempre à vista: lista em
  *   A1:D1 e as datas do período em E1 / F1. Escolher uma opção filtra na hora
  *   (onEdit, funciona também no app do celular).
- * - Menu Controle Vibra > Filtros abre o painel lateral com os mesmos filtros
- *   e o resumo (quantidade de NFs, valor e saldo em aberto).
- * - Menu Controle Vibra > Criar filtro rápido na linha 1 monta a linha 1 na
- *   planilha (o extrator em Python também monta, ao reformatar a aba).
+ * - O botão amarelo "Filtrar NFs" no começo da faixa verde (G1) e o menu
+ *   Controle Vibra > Filtros abrem o painel lateral com os mesmos filtros e o
+ *   resumo (quantidade de NFs, valor e saldo em aberto).
+ * - Menu Controle Vibra > Criar filtro rápido na linha 1 monta a linha 1 e o
+ *   botão (o extrator em Python também monta a linha 1 ao reformatar a aba,
+ *   mas imagem só o Apps Script consegue pôr).
  *
  * Cada filtro é uma lista de condições (coluna + regra) que vira duas
  * coisas: a fórmula do filtro da planilha e a mesma regra em JavaScript, que
@@ -126,12 +128,11 @@ function aplicarFiltroRapido_(aba) {
   return filtrar_(aba, opcao, de, ate);
 }
 
-/** Monta a linha 1: lista do filtro em A1:D1, datas do período em E1 / F1 e
- * o título "Do CIGAM (...)" de G até o cliente final. Tira também o botão de
- * imagem da versão anterior. */
+/** Monta a linha 1: lista do filtro em A1:D1, datas do período em E1 / F1,
+ * o título "Do CIGAM (...)" de G até o cliente final e o botão do painel em
+ * G1. Rodar de novo refaz tudo (e troca o botão). */
 function criarFiltroRapido() {
   const aba = abaControle_();
-  aba.getImages().filter(i => i.getScript() === 'abrirFiltros').forEach(i => i.remove());
   const ultima = COLUNAS_DW.length + 1;  // coluna do cliente final
   const titulo = aba.getRange(1, 1, 1, ultima).getDisplayValues()[0].find(v => v.startsWith('Do CIGAM'))
     || 'Do CIGAM (extrator)';
@@ -155,7 +156,18 @@ function criarFiltroRapido() {
   aba.getRange(1, COLUNA_TITULO, 1, ultima - COLUNA_TITULO + 1).merge().setValue(titulo)
     .setBackground(VERDE_PLANILHA).setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
   limparCriterios_(filtroDaAba_(aba));
-  SpreadsheetApp.getActive().toast('Filtro rápido criado na linha 1 (célula A1).', 'Controle Vibra', 8);
+  colocarBotaoFiltros_(aba);
+  SpreadsheetApp.getActive().toast(
+    'Filtro rápido criado em A1 e botão "Filtrar NFs" no começo da faixa verde.', 'Controle Vibra', 8);
+}
+
+/** Botão amarelo "Filtrar NFs" no começo da faixa verde do título (G1), que
+ * abre o painel lateral. Fica fora da lista de A1 pra não tampar o filtro.
+ * Tira antes qualquer botão anterior (inclusive o que ficava em A1). */
+function colocarBotaoFiltros_(aba) {
+  aba.getImages().filter(i => i.getScript() === 'abrirFiltros').forEach(i => i.remove());
+  const imagem = Utilities.newBlob(Utilities.base64Decode(BOTAO_FILTROS_PNG), 'image/png', 'filtrar.png');
+  aba.insertImage(imagem, COLUNA_TITULO, 1, 6, 2).setWidth(114).setHeight(26).assignScript('abrirFiltros');
 }
 
 function filtroRapidoMontado_(aba) {
@@ -354,7 +366,7 @@ function resumirFiltro(condicoes, colunas, linhas) {
 
 
 // ============================================================================
-// HTML do painel
+// HTML do painel e imagem do botão
 // ============================================================================
 const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 <html>
@@ -453,3 +465,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 </script>
 </body>
 </html>`;
+
+// botão "Filtrar NFs" (PNG 280x64, exibido em 114x26): amarelo com borda branca
+// pra destacar da faixa verde da linha 1, onde fica
+const BOTAO_FILTROS_PNG = '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';
