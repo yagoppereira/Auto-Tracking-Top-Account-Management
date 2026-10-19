@@ -83,7 +83,7 @@ def _python(casos, aba, desde, locais=()):
     tabela = cv.mesclar_manuais(cv.selecionar_linhas(cv.montar_controle(pd.DataFrame(casos)), manuais, desde),
                                 manuais, cv.ler_locais_entrega(list(locais)))
     largura = len(cv.COLUNAS_DW) + 1 + len(cv.COLUNAS_MANUAIS)  # A a S (O = cliente final, fórmula)
-    linhas = [linha[:largura] for linha in cv.valores_aba_controle(tabela, datetime(2026, 10, 19))[2:]]
+    linhas = [linha[:largura] for linha in cv.valores_aba_controle(tabela, datetime(2026, 10, 19))[2:2 + len(tabela)]]
     return linhas, cv.locais_sem_cadastro(tabela, cv.ler_locais_entrega(list(locais)))
 
 
@@ -91,6 +91,20 @@ def _js(casos, aba, desde, locais=()):
     saida = _rodar_node({"linhas": [_como_bigquery(c) for c in casos], "aba": aba, "desde": desde,
                          "locais": list(locais)})
     return saida["linhas"], saida["novos"]
+
+
+def test_linha_de_totais_igual_nas_duas_versoes():
+    saida = _rodar_node({"linhas": [_como_bigquery(c) for c in CASOS], "aba": [], "desde": "2026-01-01",
+                         "locais": []})
+    qtd = len(saida["linhas"])
+    virgula, ponto_e_virgula = saida["total"]
+    assert ponto_e_virgula == cv.linha_total(qtd, ";")
+    assert virgula == cv.linha_total(qtd, ",")
+    # a tabela gravada pelo Python termina com a linha de totais
+    manuais = cv.ler_preenchimento_manual([])
+    tabela = cv.mesclar_manuais(cv.selecionar_linhas(cv.montar_controle(pd.DataFrame(CASOS)), manuais,
+                                                     date(2026, 1, 1)), manuais)
+    assert cv.valores_aba_controle(tabela, datetime(2026, 10, 19))[-1] == cv.linha_total(qtd)
 
 
 def test_mesmas_celulas_nas_duas_versoes():

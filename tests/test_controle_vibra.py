@@ -372,7 +372,8 @@ def test_sincronizar_planilha_preserva_o_time_e_reformata(monkeypatch):
     assert resultado["linhas"] == 2
     assert controle.col_count == len(cv.COLUNAS)
     faixa, valores = controle.gravacoes[-1]
-    assert faixa == "A1" and len(valores) == 4
+    assert faixa == "A1" and len(valores) == 5  # grupos, cabeçalho, 2 NFs e a linha de totais
+    assert valores[-1] == cv.linha_total(2)
     linha_21897 = next(l for l in valores[2:] if l[0] == 21897)
     assert linha_21897[cv.COLUNAS.index("Status entrega")] == "Aguardando NF assinada"
     # o cliente final digitado no layout antigo não se perde: vai pra obs, e
@@ -493,3 +494,21 @@ def test_local_de_entrega_pula_caracteres_que_o_cigam_nao_usa():
     # quebraria a consulta com caractere fora da tabela ASCII.
     assert "UNNEST([39, 42, 63, 92])" in cv.SQL_NOTAS_VIBRA
     assert "ASCII(" not in cv.SQL_NOTAS_VIBRA
+
+
+def test_linha_de_totais_soma_so_as_linhas_visiveis_e_fica_fora_do_filtro():
+    linha = cv.linha_total(39)
+    assert linha[0] == ""  # A vazia: as fórmulas de O, T e U não calculam na linha de totais
+    assert linha[cv.COLUNAS.index("Série")] == "TOTAL"
+    assert linha[cv.COLUNAS.index("Emissão")] == "=SUBTOTAL(103;A3:A41)"
+    assert linha[cv.COLUNAS.index("Saldo em aberto (R$)")] == "=SUBTOTAL(109;F3:F41)"
+    assert linha[cv.COLUNAS.index("Material")] == (
+        "=SUM(MAP(F3:F41;T3:T41;LAMBDA(v;d;IF(d>0;SUBTOTAL(109;v);0))))")
+    # nada nas colunas de fórmula da linha 2 (O, T, U), que quebraria o ARRAYFORMULA
+    for nome in [cv.COLUNA_CLIENTE_FINAL] + cv.COLUNAS_FORMULA:
+        assert linha[cv.COLUNAS.index(nome)] == ""
+
+    req = cv.requests_formatacao_controle(7, 500, 0, [], linhas_dados=39)
+    filtro = next(r["setBasicFilter"]["filter"]["range"] for r in req if "setBasicFilter" in r)
+    assert filtro["endRowIndex"] == 41  # até a última NF (linha 41); a 42 é a de totais
+    assert any("updateBorders" in r and r["updateBorders"]["range"]["startRowIndex"] == 41 for r in req)

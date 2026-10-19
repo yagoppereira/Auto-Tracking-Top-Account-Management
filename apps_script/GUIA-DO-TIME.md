@@ -30,6 +30,21 @@ O que o time escreve em P a S fica preso à NF (número + série): pode reordena
 ou filtrar à vontade que, na atualização, cada informação volta pra linha
 certa.
 
+## Linha de totais
+
+Logo abaixo da última NF fica uma linha amarela de **TOTAL**, que acompanha o
+filtro escolhido (só soma as NFs que estão aparecendo):
+
+| Coluna | Mostra |
+|---|---|
+| C | Quantidade de NFs |
+| E | Valor total |
+| F | Saldo em aberto |
+| H | Quantas estão em atraso |
+| J | Saldo em atraso |
+
+Ela muda de lugar sozinha quando entram ou saem NFs. Não escreva nela.
+
 ## Status financeiro (coluna K)
 
 Calculado pelo script a partir do título no CIGAM:

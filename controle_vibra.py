@@ -677,7 +677,47 @@ def valores_aba_controle(df: pd.DataFrame, atualizado_em: datetime) -> list:
             *[linha[nome] for nome in COLUNAS_MANUAIS],
             "", "",
         ])
+    if len(df):
+        valores.append(linha_total(len(df)))
     return valores
+
+
+# --- linha de totais, logo abaixo da última NF ---------------------------------
+# SUBTOTAL só soma/conta as linhas que o filtro deixou visíveis, então os
+# totais acompanham o filtro escolhido. "Em atraso" usa MAP pra aplicar o
+# SUBTOTAL célula a célula (o truque SUMPRODUCT + OFFSET do Excel não
+# funciona na planilha). A coluna A fica vazia: as fórmulas de O, T e U
+# (ARRAYFORMULA da linha 2) só calculam onde A tem NF, e escrever nelas
+# quebraria a fórmula. A linha fica fora do filtro da aba (que vai até a
+# última NF), senão o próprio filtro a esconderia.
+MARCA_LINHA_TOTAL = "TOTAL"
+FORMATOS_LINHA_TOTAL = {
+    "Emissão": '0" NF(s)"',
+    "Valor (R$)": "[$R$ -416]#,##0.00",
+    "Saldo em aberto (R$)": "[$R$ -416]#,##0.00",
+    "Filial Vibra (CNPJ)": '0" NF(s) em atraso"',
+    "Material": '"Em atraso: "[$R$ -416]#,##0.00',
+}
+
+
+def linha_total(qtd_nfs: int, separador: str = ";") -> list:
+    """Linha de totais da aba de controle pra `qtd_nfs` NFs (linhas 3 em
+    diante). O separador de argumentos é o da localidade da planilha (";"
+    em pt_BR, gravando com USER_ENTERED)."""
+    p, u = PRIMEIRA_LINHA_DADOS, PRIMEIRA_LINHA_DADOS + qtd_nfs - 1
+    faixa = lambda nome: f"{_letra(nome)}{p}:{_letra(nome)}{u}"
+    s = separador
+    atraso = faixa("Dias em atraso")
+    linha = [""] * len(COLUNAS)
+    linha[COLUNAS.index("Série")] = MARCA_LINHA_TOTAL
+    linha[COLUNAS.index("Emissão")] = f"=SUBTOTAL(103{s}{faixa('NF')})"
+    linha[COLUNAS.index("Valor (R$)")] = f"=SUBTOTAL(109{s}{faixa('Valor (R$)')})"
+    linha[COLUNAS.index("Saldo em aberto (R$)")] = f"=SUBTOTAL(109{s}{faixa('Saldo em aberto (R$)')})"
+    linha[COLUNAS.index("Filial Vibra (CNPJ)")] = (
+        f"=SUM(MAP({faixa('NF')}{s}{atraso}{s}LAMBDA(n{s}d{s}IF(d>0{s}SUBTOTAL(103{s}n){s}0))))")
+    linha[COLUNAS.index("Material")] = (
+        f"=SUM(MAP({faixa('Saldo em aberto (R$)')}{s}{atraso}{s}LAMBDA(v{s}d{s}IF(d>0{s}SUBTOTAL(109{s}v){s}0))))")
+    return linha
 
 
 def valores_aba_listas() -> list:
@@ -804,11 +844,14 @@ def _formato(faixa, formato, campos):
     return {"repeatCell": {"range": faixa, "cell": {"userEnteredFormat": formato}, "fields": campos}}
 
 
-def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condicionais: int, bandas: list) -> list:
+def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condicionais: int, bandas: list,
+                                 linhas_dados: int = 0) -> list:
     """Requests de batchUpdate pra aba de controle. Limpa o que pode
     duplicar entre execuções (regras condicionais, faixas alternadas,
     mesclagens da linha 1, validações e notas antigas) e aplica o layout
-    atual. `regras_condicionais` e `bandas` vêm dos metadados da aba."""
+    atual. `regras_condicionais` e `bandas` vêm dos metadados da aba.
+    `linhas_dados` é a quantidade de NFs: o filtro e as faixas alternadas
+    vão até a última NF, e a linha seguinte ganha o formato de totais."""
     n_col = len(COLUNAS)
     idx = {nome: i for i, nome in enumerate(COLUNAS)}
     dados = lambda c0, c1: _faixa(sheet_id, PRIMEIRA_LINHA_DADOS - 1, total_linhas, c0, c1)
@@ -864,8 +907,10 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
         "range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
         "properties": {"pixelSize": 30}, "fields": "pixelSize"}})
 
+    # filtro e faixas alternadas até a última NF; a linha de totais fica fora
+    fim_dados = PRIMEIRA_LINHA_DADOS - 1 + linhas_dados if linhas_dados else total_linhas
     req.append({"addBanding": {"bandedRange": {
-        "range": _faixa(sheet_id, LINHA_CABECALHO - 1, total_linhas, 0, n_col),
+        "range": _faixa(sheet_id, LINHA_CABECALHO - 1, fim_dados, 0, n_col),
         "rowProperties": {"headerColor": VERDE, "firstBandColor": BRANCO, "secondBandColor": FAIXA}}}})
     req.append(_formato(_faixa(sheet_id, LINHA_CABECALHO - 1, LINHA_CABECALHO, 0, n_col),
                         {"textFormat": {"bold": True, "foregroundColor": BRANCO, "fontFamily": "Arial"},
@@ -934,7 +979,9 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
         req.append({"addConditionalFormatRule": {"index": posicao, "rule": {
             "ranges": faixas, "booleanRule": {"condition": condicao, "format": formato}}}})
 
-    req.append({"setBasicFilter": {"filter": {"range": _faixa(sheet_id, LINHA_CABECALHO - 1, total_linhas, 0, n_col)}}})
+    req.append({"setBasicFilter": {"filter": {"range": _faixa(sheet_id, LINHA_CABECALHO - 1, fim_dados, 0, n_col)}}})
+    if linhas_dados:
+        req += requests_linha_total(sheet_id, fim_dados)
     req.append({"updateCells": {
         "rows": [{"values": [{"note":
             f"Colunas A a {_letra(COLUNAS_DW[-1])} vêm do CIGAM pelo extrator (controle_vibra.py) e são "
@@ -956,6 +1003,25 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
     req.append({"updateCells": {
         "rows": [{"values": [{"note": "Opções vêm da aba Listas. Para incluir uma nova, acrescente lá."}]}],
         "fields": "note", "start": {"sheetId": sheet_id, "rowIndex": 1, "columnIndex": idx["Status entrega"]}}})
+    return req
+
+
+def requests_linha_total(sheet_id: int, indice: int) -> list:
+    """Formato da linha de totais (índice da linha a partir de 0)."""
+    n_col = len(COLUNAS)
+    linha = _faixa(sheet_id, indice, indice + 1, 0, n_col)
+    req = [
+        {"setDataValidation": {"range": linha}},
+        _formato(linha, {"backgroundColor": AMARELO_CLARO, "textFormat": {"bold": True, "fontFamily": "Arial"},
+                         "verticalAlignment": "MIDDLE"},
+                 "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat,userEnteredFormat.verticalAlignment"),
+        {"updateBorders": {"range": linha, "top": {"style": "SOLID_MEDIUM", "color": VERDE}}},
+    ]
+    for nome, padrao in FORMATOS_LINHA_TOTAL.items():
+        c = COLUNAS.index(nome)
+        req.append(_formato(_faixa(sheet_id, indice, indice + 1, c, c + 1),
+                            {"numberFormat": {"type": "NUMBER", "pattern": padrao}, "horizontalAlignment": "RIGHT"},
+                            "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"))
     return req
 
 
@@ -1074,7 +1140,7 @@ def sincronizar_planilha(client_bq, gc, planilha_id: str = PLANILHA_ID_PADRAO, d
     da_aba = next(s for s in metadados["sheets"] if s["properties"]["sheetId"] == aba.id)
     requests = requests_formatacao_controle(
         aba.id, aba.row_count, len(da_aba.get("conditionalFormats", [])),
-        [b["bandedRangeId"] for b in da_aba.get("bandedRanges", [])])
+        [b["bandedRangeId"] for b in da_aba.get("bandedRanges", [])], linhas_dados=len(tabela))
     requests += requests_formatacao_auxiliares(resumo.id, listas.id, fontes.id, resumo.row_count)
     planilha.batch_update({"requests": requests})
 

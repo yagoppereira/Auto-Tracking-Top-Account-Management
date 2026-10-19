@@ -103,7 +103,6 @@ const COLUNAS_FILTRO_RAPIDO = 4;  // A a D, mescladas
 const COLUNA_PERIODO_DE = 5;      // E
 const COLUNA_PERIODO_ATE = 6;     // F
 const COLUNA_TITULO = 7;          // G: "Do CIGAM (...)" vai de G até o cliente final
-const VERDE_PLANILHA = '#356854';
 
 
 // ============================================================================
@@ -265,12 +264,14 @@ function abaControle_() {
   return aba;
 }
 
-/** O filtro da aba (criado pelo extrator na linha do cabeçalho). Se alguém
- * removeu, cria de novo a partir da linha 2. */
+/** O filtro da aba (do cabeçalho até a última NF). Se alguém removeu, cria
+ * de novo, deixando a linha de totais de fora. */
 function filtroDaAba_(aba) {
-  return aba.getFilter()
-    || aba.getRange(PRIMEIRA_LINHA_DADOS - 1, 1, aba.getMaxRows() - PRIMEIRA_LINHA_DADOS + 2, aba.getLastColumn())
-      .createFilter();
+  if (aba.getFilter()) return aba.getFilter();
+  const totais = linhasDeTotal_(aba);
+  const ultima = Math.max(totais.length ? totais[0] - 1 : aba.getLastRow(), PRIMEIRA_LINHA_DADOS);
+  return aba.getRange(PRIMEIRA_LINHA_DADOS - 1, 1, ultima - PRIMEIRA_LINHA_DADOS + 2, aba.getLastColumn())
+    .createFilter();
 }
 
 function limparCriterios_(filtroAba) {

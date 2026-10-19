@@ -56,6 +56,21 @@ const COLUNAS_MANUAIS = ['Status entrega', 'Data entrega / NF assinada', 'Obs. E
 // digitado e não bate com a aba Locais de entrega vai pra Obs. Emissão
 const COLUNA_CLIENTE_FINAL_DIGITADO = 'Cliente final / local de entrega';
 const PRIMEIRA_LINHA_DADOS = 3;
+const COLUNAS_PLANILHA = COLUNAS_DW.concat([COLUNA_CLIENTE_FINAL], COLUNAS_MANUAIS, ['Dias em atraso', 'Próxima ação']);
+const VERDE_PLANILHA = '#356854';
+
+// Linha de totais logo abaixo da última NF (mesmo conteúdo de linha_total em
+// controle_vibra.py). SUBTOTAL só conta as linhas visíveis no filtro; "em
+// atraso" aplica o SUBTOTAL célula a célula com MAP. A coluna A fica vazia
+// pras fórmulas de O, T e U (ARRAYFORMULA da linha 2) não calcularem nela.
+const MARCA_LINHA_TOTAL = 'TOTAL';
+const FORMATOS_LINHA_TOTAL = {
+  'Emissão': '0" NF(s)"',
+  'Valor (R$)': '[$R$ -416]#,##0.00',
+  'Saldo em aberto (R$)': '[$R$ -416]#,##0.00',
+  'Filial Vibra (CNPJ)': '0" NF(s) em atraso"',
+  'Material': '"Em atraso: "[$R$ -416]#,##0.00',
+};
 const TOLERANCIA_CENTAVOS = 0.01;
 
 const TABELAS_CONSULTADAS = [
@@ -297,7 +312,8 @@ function consultarNotasVibra_() {
 function gravarControle_(aba, tabela, agora) {
   const nDw = COLUNAS_DW.length;
   const nColunas = nDw + 1 + COLUNAS_MANUAIS.length;
-  const necessarias = PRIMEIRA_LINHA_DADOS - 1 + tabela.length;
+  const totaisAntigos = linhasDeTotal_(aba);
+  const necessarias = PRIMEIRA_LINHA_DADOS + tabela.length;  // NFs + linha de totais
   if (aba.getMaxRows() < necessarias) {
     aba.insertRowsAfter(aba.getMaxRows(), necessarias - aba.getMaxRows());
   }
@@ -310,11 +326,91 @@ function gravarControle_(aba, tabela, agora) {
     aba.getRange(PRIMEIRA_LINHA_DADOS, nDw + 2, linhas.length, COLUNAS_MANUAIS.length)
       .setValues(linhas.map(l => l.slice(nDw + 1)));
   }
+  const linhaTotalNova = PRIMEIRA_LINHA_DADOS + tabela.length;
+  // linha de totais anterior que agora é NF (ou sobra) volta ao formato das NFs
+  totaisAntigos.filter(r => r !== linhaTotalNova && r !== PRIMEIRA_LINHA_DADOS).forEach(r =>
+    aba.getRange(PRIMEIRA_LINHA_DADOS, 1, 1, COLUNAS_PLANILHA.length)
+      .copyFormatToRange(aba, 1, COLUNAS_PLANILHA.length, r, r));
+  if (tabela.length) gravarLinhaTotal_(aba, tabela.length);
+  ajustarFiltro_(aba, linhaTotalNova - 1);
   // o título fica em A1 ou, com o filtro rápido montado (FiltrosVibra.gs), em G1
   const linha1 = aba.getRange(1, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
   const colunaTitulo = Math.max(linha1.findIndex(v => String(v).startsWith('Do CIGAM')), 0) + 1;
   aba.getRange(1, colunaTitulo).setValue(
     `Do CIGAM (extrator, atualizado em ${Utilities.formatDate(agora, fusoDaPlanilha_(), 'dd/MM/yyyy HH:mm')})`);
+}
+
+/** Linha de totais pra `qtd` NFs (linhas 3 em diante), com o separador de
+ * argumentos informado. */
+function linhaTotal(qtd, separador) {
+  const s = separador;
+  const p = PRIMEIRA_LINHA_DADOS;
+  const u = PRIMEIRA_LINHA_DADOS + qtd - 1;
+  const faixa = nome => `${letraDe_(nome)}${p}:${letraDe_(nome)}${u}`;
+  const atraso = faixa('Dias em atraso');
+  const linha = COLUNAS_PLANILHA.map(() => '');
+  const em = nome => COLUNAS_PLANILHA.indexOf(nome);
+  linha[em('Série')] = MARCA_LINHA_TOTAL;
+  linha[em('Emissão')] = `=SUBTOTAL(103${s}${faixa('NF')})`;
+  linha[em('Valor (R$)')] = `=SUBTOTAL(109${s}${faixa('Valor (R$)')})`;
+  linha[em('Saldo em aberto (R$)')] = `=SUBTOTAL(109${s}${faixa('Saldo em aberto (R$)')})`;
+  linha[em('Filial Vibra (CNPJ)')] =
+    `=SUM(MAP(${faixa('NF')}${s}${atraso}${s}LAMBDA(n${s}d${s}IF(d>0${s}SUBTOTAL(103${s}n)${s}0))))`;
+  linha[em('Material')] =
+    `=SUM(MAP(${faixa('Saldo em aberto (R$)')}${s}${atraso}${s}LAMBDA(v${s}d${s}IF(d>0${s}SUBTOTAL(109${s}v)${s}0))))`;
+  return linha;
+}
+
+function letraDe_(nome) {
+  let letra = '';
+  for (let n = COLUNAS_PLANILHA.indexOf(nome) + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    letra = String.fromCharCode(65 + ((n - 1) % 26)) + letra;
+  }
+  return letra;
+}
+
+/** Grava e formata a linha de totais. As fórmulas vão primeiro com "," (o
+ * formato do Apps Script); se a planilha não aceitar, com ";" (pt_BR). */
+function gravarLinhaTotal_(aba, qtd) {
+  const r = PRIMEIRA_LINHA_DADOS + qtd;
+  const nDw = COLUNAS_DW.length;  // as fórmulas ficam de B a J, dentro de A a N
+  const faixa = aba.getRange(r, 1, 1, nDw);
+  faixa.setValues([linhaTotal(qtd, ',').slice(0, nDw)]);
+  SpreadsheetApp.flush();
+  if (faixa.getDisplayValues()[0].some(v => String(v).startsWith('#'))) {
+    faixa.setValues([linhaTotal(qtd, ';').slice(0, nDw)]);
+  }
+  aba.getRange(r, 1, 1, COLUNAS_PLANILHA.length).clearDataValidations()
+    .setBackground('#fff2cc').setFontWeight('bold')
+    .setBorder(true, null, null, null, null, null, VERDE_PLANILHA, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  Object.keys(FORMATOS_LINHA_TOTAL).forEach(nome =>
+    aba.getRange(r, COLUNAS_PLANILHA.indexOf(nome) + 1)
+      .setNumberFormat(FORMATOS_LINHA_TOTAL[nome]).setHorizontalAlignment('right'));
+}
+
+/** Linhas (a partir de 1) que têm a marca da linha de totais na coluna B. */
+function linhasDeTotal_(aba) {
+  const n = aba.getMaxRows() - PRIMEIRA_LINHA_DADOS + 1;
+  if (n <= 0) return [];
+  return aba.getRange(PRIMEIRA_LINHA_DADOS, COLUNAS_PLANILHA.indexOf('Série') + 1, n, 1).getValues()
+    .map((v, i) => (texto_(v[0]) === MARCA_LINHA_TOTAL ? PRIMEIRA_LINHA_DADOS + i : null))
+    .filter(r => r !== null);
+}
+
+/** O filtro da aba vai do cabeçalho até a última NF: a linha de totais fica
+ * fora, senão o próprio filtro a esconderia. Se a faixa mudou, recria o
+ * filtro e reaplica o filtro rápido escolhido em A1 (FiltrosVibra.gs). */
+function ajustarFiltro_(aba, ultimaLinhaNf) {
+  const ultima = Math.max(ultimaLinhaNf, PRIMEIRA_LINHA_DADOS);
+  const filtro = aba.getFilter();
+  if (filtro) {
+    const faixa = filtro.getRange();
+    if (faixa.getRow() === PRIMEIRA_LINHA_DADOS - 1 && faixa.getLastRow() === ultima) return;
+    filtro.remove();
+  }
+  aba.getRange(PRIMEIRA_LINHA_DADOS - 1, 1, ultima - PRIMEIRA_LINHA_DADOS + 2,
+    Math.max(aba.getLastColumn(), COLUNAS_PLANILHA.length)).createFilter();
+  if (typeof aplicarFiltroRapido_ === 'function' && filtroRapidoMontado_(aba)) aplicarFiltroRapido_(aba);
 }
 
 function atualizarFontes_(planilha, agora, linhas) {

@@ -54,6 +54,12 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   mesmo painel. É imagem com script: só funciona no navegador do computador.
   Para mover sem acionar, clique com o botão direito (só seleciona) e arraste.
 
+Abaixo da última NF o script grava a **linha de totais** (marca "TOTAL" na
+coluna B): quantidade de NFs, valor, saldo, quantidade e saldo em atraso, com
+SUBTOTAL, que só conta as linhas visíveis no filtro. O filtro da aba vai até a
+última NF, pra linha de totais não ser escondida por ele; a cada atualização o
+script move a linha, ajusta o filtro e reaplica o filtro rápido de A1.
+
 O script só grava valores: a formatação, as listas suspensas e as fórmulas das
 colunas O, T e U (linha 2) já estão na planilha. Para refazer a formatação do
 zero, rode o extrator em Python (`controle_vibra.py`), que reaplica o layout.
