@@ -25,7 +25,24 @@
 // status de entrega (coluna Status entrega) que liberam a cobrança
 const ENTREGA_CONCLUIDA = ['NF assinada recebida', 'Não se aplica'];
 
+// visão "Atualizar o controle da Vibra": só as colunas que interessam pra
+// atualizar o controle (A, C, D, F, G, H, I, J, O, S e T). Achadas pelo nome
+// do cabeçalho; as outras ficam ocultas até escolher outro filtro.
+const COLUNAS_CONTROLE_VIBRA = [
+  'NF', 'Emissão', 'Vencimento', 'Saldo em aberto (R$)', 'Nº Pedido Vibra', 'Filial Vibra (CNPJ)',
+  'Tipo de NF', 'Material', 'Cliente final', 'Obs. financeiro', 'Dias em atraso',
+];
+
 const FILTROS_VIBRA = {
+  controle_vibra: {
+    rotulo: 'Atualizar o controle da Vibra',
+    titulo: 'Atualizar o controle da Vibra (em aberto e entregues)',
+    colunas: COLUNAS_CONTROLE_VIBRA,
+    condicoes: () => [
+      { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
+      { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
+    ],
+  },
   pendentes_pagamento: {
     rotulo: 'Pendentes de pagamento',
     titulo: 'Pendentes de pagamento (todos os títulos em aberto)',
@@ -218,14 +235,23 @@ function filtrar_(aba, opcao, de, ate) {
   const linhaCabecalho = filtroAba.getRange().getRow();
   const { colunas, linhas } = lerTabela_(aba, linhaCabecalho);
   limparCriterios_(filtroAba);
-  if (!opcao) return Object.assign({ titulo: OPCAO_TODAS }, resumirFiltro([], colunas, linhas));
+  const filtro = opcao ? FILTROS_VIBRA[opcao] : null;
+  mostrarColunas_(aba, colunas, filtro && filtro.colunas);
+  if (!filtro) return Object.assign({ titulo: OPCAO_TODAS }, resumirFiltro([], colunas, linhas));
 
-  const filtro = FILTROS_VIBRA[opcao];
   const condicoes = filtro.condicoes(de, ate);
   const formula = formulaFiltro(condicoes, colunas, linhaCabecalho + 1);
   filtroAba.setColumnFilterCriteria(1, SpreadsheetApp.newFilterCriteria().whenFormulaSatisfied(formula).build());
   const titulo = filtro.periodo ? `${filtro.titulo}: ${dataBr_(de)} a ${dataBr_(ate)}` : filtro.titulo;
   return Object.assign({ titulo: titulo }, resumirFiltro(condicoes, colunas, linhas));
+}
+
+/** Mostra todas as colunas e, se a opção tem lista própria, oculta as demais. */
+function mostrarColunas_(aba, colunas, visiveis) {
+  const total = aba.getMaxColumns();
+  aba.showColumns(1, total);
+  if (!visiveis) return;
+  colunasAOcultar(visiveis, colunas, total).forEach(([inicio, quantidade]) => aba.hideColumns(inicio, quantidade));
 }
 
 function validarPeriodo_(de, ate) {
@@ -268,6 +294,21 @@ function lerTabela_(aba, linhaCabecalho) {
 // ============================================================================
 // Regras (sem serviços do Apps Script: testadas no Node)
 // ============================================================================
+/** Faixas [primeira coluna (a partir de 1), quantidade] a ocultar pra ficarem
+ * só as colunas `visiveis` (nomes do cabeçalho). Coluna sem cabeçalho também
+ * fica oculta. */
+function colunasAOcultar(visiveis, colunas, total) {
+  const manter = new Set(visiveis.map(nome => indiceColuna_(colunas, nome) + 1));
+  const faixas = [];
+  for (let c = 1; c <= total; c++) {
+    if (manter.has(c)) continue;
+    const ultima = faixas[faixas.length - 1];
+    if (ultima && ultima[0] + ultima[1] === c) ultima[1]++;
+    else faixas.push([c, 1]);
+  }
+  return faixas;
+}
+
 function letraColuna_(indice) {
   let letra = '';
   for (let n = indice + 1; n > 0; n = Math.floor((n - 1) / 26)) {
@@ -385,6 +426,8 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
   .atalhos a { color: #356854; font-size: 11px; margin-right: 8px; cursor: pointer; text-decoration: underline; }
   button.aplicar { margin-top: 6px; padding: 6px 12px; background: #356854; color: #fff; border: 0;
     border-radius: 6px; cursor: pointer; }
+  button.filtro.especial { background: #ffd666; border-color: #356854; font-weight: bold; color: #356854; }
+  button.filtro.especial:hover { background: #ffe08a; }
   button.limpar { margin-top: 14px; padding: 6px 12px; background: #fff; color: #356854;
     border: 1px solid #356854; border-radius: 6px; cursor: pointer; width: 100%; }
   #resultado { margin-top: 14px; padding: 10px; background: #f1f3f4; border-radius: 6px; min-height: 18px; }
@@ -393,6 +436,10 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+  <button class="filtro especial" onclick="aplicar('controle_vibra')">Atualizar o controle da Vibra
+    <small>Em aberto e entregues (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, S e T.
+    Escolha outro filtro ou "Mostrar todas" para voltar as colunas</small></button>
+
   <h3>Financeiro</h3>
   <button class="filtro" onclick="aplicar('pendentes_pagamento')">Pendentes de pagamento
     <small>Todos os títulos em aberto ou pagos em parte</small></button>

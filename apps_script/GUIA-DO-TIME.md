@@ -95,7 +95,8 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 
 | Opção | Mostra |
 |---|---|
-| Todas as NFs | Tira o filtro |
+| Todas as NFs | Tira o filtro e mostra todas as colunas |
+| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) e entregues (NF assinada recebida ou "Não se aplica"), **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (cliente final), S (obs. financeiro) e T (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
 | Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
 | Pendentes entregues | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
 | Pendentes entregues em atraso | Os de cima com vencimento já passado |
@@ -110,8 +111,9 @@ os mesmos filtros, atalhos de período (este mês, mês passado, últimos 30 dia
 este ano) e o resumo de quantidade, valor e saldo em aberto.
 
 Cuidados:
-- O filtro vale **para todo mundo** que está com a planilha aberta. Ao
-  terminar, volte a lista de A1 para **Todas as NFs**.
+- O filtro (e as colunas ocultas do "Atualizar o controle da Vibra") vale
+  **para todo mundo** que está com a planilha aberta. Ao terminar, volte a
+  lista de A1 para **Todas as NFs**.
 - Na primeira vez que alguém abre o painel (botão ou menu), o Google pede
   autorização para o script. É só aceitar (o filtro rápido de A1 não pede).
 - O botão amarelo só funciona no navegador do computador. No celular, use a

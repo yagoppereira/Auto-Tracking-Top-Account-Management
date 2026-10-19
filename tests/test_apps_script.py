@@ -145,6 +145,7 @@ def test_filtros_contam_as_nfs_de_cada_condicao():
     saida = _filtros()
     contagem = {opcao: r["resumo"]["nfs"] for opcao, r in saida.items()}
     assert contagem == {
+        "controle_vibra": 3,            # em aberto/parcial e entregues (ou não se aplica): 1, 2 e 10
         "pendentes_pagamento": 4,       # 1, 2, 3 e 10: todo título em aberto ou pago em parte
         "pendentes_entregues": 3,       # 1, 2 e 10: com entrega concluída ou não se aplica
         "pendentes_entregues_atraso": 1,  # só a 1 tem dias em atraso
@@ -183,3 +184,14 @@ def test_filtro_rapido_da_linha_1_tem_as_mesmas_opcoes_nas_duas_versoes():
     assert saida["opcao_por_rotulo"]["Todas as NFs"] is None
     assert all(saida["opcao_por_rotulo"][r] for r in cv.OPCOES_FILTRO_RAPIDO[1:])
     assert saida["aviso"] == "Pagos: 3 NF(s) · valor R$ 1.234.567,80"
+
+
+def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
+    colunas = {nome: i for i, nome in enumerate(cv.COLUNAS)}
+    saida = _rodar_node({"filtros": {"colunas": colunas, "linhas": [], "de": "2026-09-01", "ate": "2026-09-30"}})
+    ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
+               for inicio, quantidade in saida["ocultas_controle_vibra"] for i in range(quantidade)}
+    visiveis = {cv._letra(nome) for nome in cv.COLUNAS} - ocultas
+    assert visiveis == set("ACDFGHIJOST")
+    # faixas contíguas: uma chamada de ocultar por faixa
+    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [16, 3], [21, 1]]

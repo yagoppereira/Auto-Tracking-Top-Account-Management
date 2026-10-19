@@ -45,7 +45,9 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   hora, pelo gatilho `onEdit` (funciona também no app do celular). Para
   "Pagos no período", as datas ficam em E1 e F1; sem datas, usa o mês atual.
   O filtro é o filtro comum da aba, igual pra todo mundo que está com a
-  planilha aberta; **Todas as NFs** tira o filtro.
+  planilha aberta; **Todas as NFs** tira o filtro. **Atualizar o controle da
+  Vibra** (em aberto e entregues) também oculta as colunas fora de A, C, D,
+  F, G, H, I, J, O, S e T; qualquer outra opção mostra todas de novo.
 - **Controle Vibra > Filtros**: painel lateral com os mesmos filtros, atalhos
   de período e o resumo (NFs, valor e saldo).
 - **Botão amarelo "Filtrar NFs"** (começo da faixa verde, em G1): abre o
