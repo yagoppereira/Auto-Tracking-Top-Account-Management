@@ -17,7 +17,7 @@
  * diária e Remover agendamento. O agendamento roda com o login de quem o
  * criou.
  *
- * É o espelho de controle_vibra.py (repositório Projeto-Consulta-Mensalidades):
+ * É o espelho de controle_vibra.py (repositório Auto-Tracking-Top-Account-Management):
  * mesmo SQL e mesmas regras. tests/test_apps_script.py compara as duas
  * versões; ao mudar uma, mude a outra.
  */

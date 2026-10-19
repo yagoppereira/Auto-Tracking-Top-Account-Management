@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# credenciais de service account
+*.json
+!apps_script/appsscript.json

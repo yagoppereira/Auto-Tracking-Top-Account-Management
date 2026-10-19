@@ -17,23 +17,22 @@ Divisão de responsabilidade na planilha:
   valor na linha da mesma NF (chave = NF + série);
 - colunas T e U (dias em atraso, próxima ação) são fórmulas da planilha.
 
-Roda de três jeitos:
+Roda de dois jeitos:
 - dentro da própria planilha, pelo Apps Script apps_script/ControleVibra.gs
   (menu "Controle Vibra"), com o login de quem executa, sem service
   account. É o espelho deste módulo: mesmo SQL e mesmas regras, conferidos
   por tests/test_apps_script.py. Ao mudar uma regra aqui, mude lá também;
-- pela aba "NFs Vibra" do app Streamlit (app.py), botão "Atualizar planilha";
-- pelo terminal, pra agendar (cron, GitHub Actions etc.):
+- pelo terminal, pra agendar (cron, GitHub Actions etc.) ou usar a partir de
+  outro programa (preparar_controle / sincronizar_planilha):
       python controle_vibra.py --credenciais sa.json
       python controle_vibra.py --credenciais sa.json --somente-ler   # só mostra
 
-Nos dois últimos, a service account precisa de leitura no BigQuery (bronze.cigam__empresas,
+Pelo terminal, a service account precisa de leitura no BigQuery (bronze.cigam__empresas,
 bronze.cigam__notas_fiscais, silver.lancamentos_receber,
 silver.cadastro_materiais_cigam) e de acesso de EDITOR à planilha
 (compartilhar a planilha com o e-mail da service account).
 
-Este módulo não importa streamlit: a lógica fica testável sem o app
-(tests/test_controle_vibra.py).
+A lógica fica testável sem BigQuery nem planilha (tests/test_controle_vibra.py).
 """
 
 import argparse
@@ -753,7 +752,7 @@ def valores_aba_fontes(atualizado_em: datetime, desde: date, qtd_linhas: int, so
             f"'{ABA_CONTROLE}'!A2:{_letra(COLUNAS_DW[-1])}",
             "CIGAM (BigQuery)",
             ", ".join(TABELAS_CONSULTADAS),
-            "Extrator controle_vibra.py (repositório Projeto-Consulta-Mensalidades)",
+            "Extrator controle_vibra.py (repositório Auto-Tracking-Top-Account-Management)",
             "SQL_NOTAS_VIBRA em controle_vibra.py: NFs de saída para a raiz de CNPJ da Vibra, com título, "
             "baixas (por codigoPartida), NF de devolução e itens.",
             f"raiz CNPJ {RAIZ_CNPJ_VIBRA}; NFs desde {desde.strftime('%d/%m/%Y')}, mais as em aberto "
