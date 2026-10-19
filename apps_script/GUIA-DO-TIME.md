@@ -20,7 +20,7 @@ A linha 1 mostra, em cada bloco de colunas, quem cuida dele.
 
 | Colunas | Bloco | Quem preenche |
 |---|---|---|
-| A a N | **Do CIGAM**: NF, série, emissão, vencimento, valor, saldo, nº do pedido, filial Vibra, tipo, material, status financeiro, data de pagamento, NF de devolução, nº do local de entrega | O script. **Não edite**: tudo é reescrito na próxima atualização. |
+| A a N | **Do CIGAM**: NF, série, emissão, vencimento, valor, saldo, nº do pedido, filial Vibra, tipo, material, status financeiro, data de pagamento, NF de devolução, nº do local de entrega | O script. **Não edite**: tudo é reescrito na próxima atualização. Exceção: o **nº do pedido (G)** pode ser digitado quando está em branco (ver abaixo). |
 | O | **Cliente final** | Fórmula. Vem da aba **Locais de entrega** (ver abaixo). |
 | P a R | **Emissão preenche**: status entrega, data da entrega / NF assinada, obs. Emissão | Emissão |
 | S | **Financeiro preenche**: obs. financeiro | Financeiro |
@@ -154,7 +154,14 @@ Cuidados:
 ## Dúvidas comuns
 
 - **Escrevi em uma coluna de A a N e sumiu.** Essas colunas são reescritas a
-  cada atualização. Use as colunas de observação (R ou S).
+  cada atualização. Use as colunas de observação (R ou S). A exceção é o nº do
+  pedido (G): digitado numa NF em que ele está em branco, ele é mantido.
+- **O nº do pedido da Vibra está na NF, mas a coluna G está em branco.** O
+  script só acha o pedido quando ele está escrito na descrição de algum item
+  da NF (ex.: "OC: 4503816077"). O texto de descrição/dados adicionais da NF
+  que aparece no CIGAM não chega ao DW, então pedido escrito só ali não é
+  encontrado (ex.: NFs 25263 e 26049). Digite o número na coluna G: ele fica
+  guardado nas próximas atualizações.
 - **A NF foi paga ontem e continua em aberto.** O DW atualiza com até 1 dia de
   atraso. Se continuar no dia seguinte, confira a baixa no CIGAM.
 - **Uma NF não aparece.** Ela entra na próxima atualização (7h) ou ao clicar em
