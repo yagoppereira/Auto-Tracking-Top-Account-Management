@@ -69,6 +69,17 @@ O script só grava valores: a formatação, as listas suspensas e as fórmulas d
 colunas O, T e U (linha 2) já estão na planilha. Para refazer a formatação do
 zero, rode o extrator em Python (`controle_vibra.py`), que reaplica o layout.
 
+## Erros comuns
+
+- **"O serviço BigQuery não está ativado"** (ou, na versão anterior do script,
+  "BigQuery is not defined"): o projeto do Apps Script está sem o serviço
+  avançado. Em **Serviços** (+), adicionar "BigQuery API" com o identificador
+  `BigQuery`, ou colar o `appsscript.json` deste diretório. Acontece quando o
+  script é colado num projeto novo ou o manifesto é substituído.
+- **"Não consegui consultar o DW com o seu login"**: o serviço está ligado,
+  mas quem executa não tem permissão de rodar consultas no projeto ou de ler
+  as tabelas listadas.
+
 ## Manutenção
 
 O script é o espelho de `controle_vibra.py`: mesmo SQL e mesmas regras.

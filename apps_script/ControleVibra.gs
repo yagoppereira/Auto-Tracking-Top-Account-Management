@@ -282,6 +282,14 @@ function consultarNotasVibra_() {
     ],
     timeoutMs: 60000,
   };
+  // sem o serviço avançado ligado, o nome BigQuery nem existe no script: não
+  // é falta de permissão no DW, é configuração do projeto do Apps Script
+  if (typeof BigQuery === 'undefined') {
+    throw new Error(
+      'O serviço BigQuery não está ativado neste Apps Script. No editor (Extensões > Apps Script), '
+      + 'clique em Serviços (+), escolha "BigQuery API" e clique em Adicionar (identificador BigQuery). '
+      + 'Ou cole o appsscript.json do repositório no lugar do manifesto do projeto.');
+  }
   let resposta;
   try {
     resposta = BigQuery.Jobs.query(pedido, PROJECT_ID);
