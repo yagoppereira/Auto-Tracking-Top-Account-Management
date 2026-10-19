@@ -125,6 +125,13 @@ linha 1, ou o menu **Controle Vibra > Filtros** abre um painel à direita com
 os mesmos filtros, atalhos de período (este mês, mês passado, últimos 30 dias,
 este ano) e o resumo de quantidade, valor e saldo em aberto.
 
+**Baixar em Excel:** no painel (botão amarelo **Filtrar NFs**), o botão verde
+**Baixar em Excel o que está na tela** gera um `.xlsx` só com o que está
+aparecendo: as NFs do filtro, as colunas visíveis e a linha de totais (a linha
+1, com o filtro rápido e o título, não vai). Também pelo menu **Controle Vibra
+> Baixar em Excel o que está na tela**. Para mandar à Vibra: escolha
+**Atualizar o controle da Vibra** em A1 e baixe.
+
 Cuidados:
 - O filtro (e as colunas ocultas do "Atualizar o controle da Vibra") vale
   **para todo mundo** que está com a planilha aberta. Ao terminar, volte a

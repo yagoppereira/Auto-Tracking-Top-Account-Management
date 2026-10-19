@@ -209,3 +209,53 @@ def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
     assert visiveis == set("ACDFGHIJOST")
     # faixas contíguas: uma chamada de ocultar por faixa
     assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [16, 3], [21, 1]]
+
+
+
+def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
+    import io
+    import zipfile
+
+    openpyxl = pytest.importorskip("openpyxl")
+    cabecalho = list(cv.COLUNAS)
+    linha = [""] * len(cabecalho)
+    linha[cv.COLUNAS.index("NF")] = 21903
+    linha[cv.COLUNAS.index("Emissão")] = {"data": "2026-05-26"}
+    linha[cv.COLUNAS.index("Saldo em aberto (R$)")] = 4561.68
+    linha[cv.COLUNAS.index("Filial Vibra (CNPJ)")] = "34.274.233/0001-02"
+    linha[cv.COLUNAS.index("Material")] = "1x LICENCIAMENTO & <suporte>"
+    linha[cv.COLUNAS.index("Status financeiro")] = "Em aberto"  # coluna oculta: não vai
+    linha[cv.COLUNAS.index("Dias em atraso")] = 116
+    total = [""] * len(cabecalho)
+    total[cv.COLUNAS.index("Série")] = "TOTAL"
+    total[cv.COLUNAS.index("Emissão")] = 1
+    total[cv.COLUNAS.index("Saldo em aberto (R$)")] = 4561.68
+    total[cv.COLUNAS.index("Material")] = 4561.68
+    # colunas da visão "Atualizar o controle da Vibra": A C D F G H I J O S T
+    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOST"]
+    partes = _rodar_node({"xlsx": {"cabecalho": cabecalho, "linhas": [linha], "total": total,
+                                   "colunas": colunas, "larguras": [70] * len(colunas)}})
+
+    arquivo = io.BytesIO()
+    with zipfile.ZipFile(arquivo, "w", zipfile.ZIP_DEFLATED) as zip_:  # o que o Utilities.zip faz
+        for caminho, xml in partes.items():
+            zip_.writestr(caminho, xml.encode("utf-8"))
+    planilha = openpyxl.load_workbook(io.BytesIO(arquivo.getvalue()))
+    aba = planilha["Controle Vibra"]
+    linhas = [[c.value for c in r] for r in aba.iter_rows()]
+
+    assert linhas[0] == ["NF", "Emissão", "Vencimento", "Saldo em aberto (R$)", "Nº Pedido Vibra",
+                         "Filial Vibra (CNPJ)", "Tipo de NF", "Material", "Cliente final", "Obs. financeiro",
+                         "Dias em atraso"]
+    nf = dict(zip(linhas[0], linhas[1]))
+    assert nf["NF"] == 21903 and nf["Saldo em aberto (R$)"] == 4561.68 and nf["Dias em atraso"] == 116
+    assert nf["Emissão"] == datetime(2026, 5, 26)
+    assert nf["Material"] == "1x LICENCIAMENTO & <suporte>"
+    assert "Em aberto" not in linhas[1]
+    totais = dict(zip(linhas[0], linhas[2]))
+    assert totais["NF"] == "TOTAL" and totais["Emissão"] == 1 and totais["Material"] == 4561.68
+    assert len(linhas) == 3  # sem a linha 1 da planilha (filtro rápido e título)
+    assert aba["D2"].number_format == '"R$ "#,##0.00'
+    assert aba["B2"].number_format == "dd/mm/yyyy"
+    assert aba["H3"].number_format == '"Em atraso: R$ "#,##0.00'
+    assert aba["A1"].font.b and aba.freeze_panes == "A2"

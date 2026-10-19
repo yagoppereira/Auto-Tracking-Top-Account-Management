@@ -12,7 +12,7 @@ const codigo = ['ControleVibra.gs', 'FiltrosVibra.gs']
   .map(nome => fs.readFileSync(__dirname + '/../apps_script/' + nome, 'utf8')).join('\n');
 vm.runInContext(codigo + '\nthis.__api = {montarTabela, linhasParaPlanilha, locaisSemCadastro, lerLocaisEntrega, '
   + 'SQL_NOTAS_VIBRA, linhaTotal, FILTROS_VIBRA, formulaFiltro, resumirFiltro, OPCOES_FILTRO_RAPIDO, opcaoDoRotulo, '
-  + 'textoResumo, colunasAOcultar, COLUNAS_CONTROLE_VIBRA};', contexto);
+  + 'textoResumo, colunasAOcultar, COLUNAS_CONTROLE_VIBRA, partesXlsx};', contexto);
 const api = contexto.__api;
 
 const entrada = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -21,7 +21,12 @@ const serializar = v => (v && typeof v.getFullYear === 'function')
   ? `${doisDigitos(v.getDate())}/${doisDigitos(v.getMonth() + 1)}/${v.getFullYear()}`
   : v;
 
-if (entrada.filtros) {
+if (entrada.xlsx) {
+  const celula = v => (v && v.data ? new Date(v.data + 'T00:00:00') : v);
+  const { cabecalho, linhas, total, colunas, larguras } = entrada.xlsx;
+  process.stdout.write(JSON.stringify(api.partesXlsx(cabecalho, linhas.map(l => l.map(celula)),
+    total ? total.map(celula) : null, colunas, larguras)));
+} else if (entrada.filtros) {
   // células {"data": "aaaa-mm-dd"} viram Date, como no getValues
   const celula = v => (v && v.data ? new Date(v.data + 'T00:00:00') : v);
   const { colunas, linhas, de, ate } = entrada.filtros;

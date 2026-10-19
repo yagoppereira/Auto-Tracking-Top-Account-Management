@@ -115,7 +115,11 @@ function onEdit(e) {
   const aba = e.range.getSheet();
   if (aba.getName() !== ABA_CONTROLE || e.range.getRow() !== 1 || e.range.getColumn() > COLUNA_PERIODO_ATE) return;
   try {
-    aba.getParent().toast(textoResumo(aplicarFiltroRapido_(aba)), 'Filtro', 8);
+    let aviso = textoResumo(aplicarFiltroRapido_(aba));
+    if (texto_(aba.getRange(1, 1).getValue()) === FILTROS_VIBRA.controle_vibra.rotulo) {
+      aviso += '. Para baixar em Excel: botão amarelo Filtrar NFs ou menu Controle Vibra.';
+    }
+    aba.getParent().toast(aviso, 'Filtro', 10);
   } catch (erro) {
     aba.getParent().toast(erro.message, 'Filtro', 8);
   }
@@ -408,6 +412,177 @@ function resumirFiltro(condicoes, colunas, linhas) {
 
 
 // ============================================================================
+// Baixar em Excel o que está na tela
+// ============================================================================
+// O .xlsx é montado aqui mesmo (é um zip de XMLs): sem arquivo temporário no
+// Drive e sem pedir permissão nova. Vai só o cabeçalho (linha 2), as NFs que o
+// filtro deixou visíveis, as colunas visíveis e a linha de totais; a linha 1
+// (filtro rápido e título) fica de fora.
+
+/** Abre uma janelinha que gera o arquivo e começa o download (menu). */
+function abrirDownloadExcel() {
+  const html = HtmlService.createHtmlOutput(HTML_DOWNLOAD_EXCEL).setWidth(360).setHeight(140);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Baixar em Excel');
+}
+
+/** {nome, base64, nfs}: o .xlsx do que está visível na aba de controle. */
+function gerarExcelFiltrado() {
+  const aba = abaControle_();
+  const totais = linhasDeTotal_(aba);
+  const cabecalho = PRIMEIRA_LINHA_DADOS - 1;
+  const linhaTotal = totais.length ? totais[0] : null;
+  const ultimaNf = linhaTotal ? linhaTotal - 1 : aba.getLastRow();
+  const nCol = Math.min(aba.getLastColumn(), COLUNAS_PLANILHA.length);
+  const valores = aba.getRange(cabecalho, 1, (linhaTotal || ultimaNf) - cabecalho + 1, nCol).getValues();
+
+  const colunas = [];
+  for (let c = 1; c <= nCol; c++) if (!aba.isColumnHiddenByUser(c)) colunas.push(c - 1);
+  const linhas = [];
+  for (let r = PRIMEIRA_LINHA_DADOS; r <= ultimaNf; r++) {
+    const linha = valores[r - cabecalho];
+    if (texto_(linha[0]) && !aba.isRowHiddenByFilter(r)) linhas.push(linha);
+  }
+  const total = linhaTotal ? valores[linhaTotal - cabecalho] : null;
+  const larguras = colunas.map(i => aba.getColumnWidth(i + 1));
+
+  const partes = partesXlsx(valores[0].map(texto_), linhas, total, colunas, larguras);
+  const nome = `Controle Vibra ${Utilities.formatDate(new Date(), fusoDaPlanilha_(), 'yyyy-MM-dd')}.xlsx`;
+  const blobs = Object.keys(partes).map(caminho => Utilities.newBlob(partes[caminho], 'application/xml', caminho));
+  const zip = Utilities.zip(blobs, nome);
+  return { nome: nome, base64: Utilities.base64Encode(zip.getBytes()), nfs: linhas.length };
+}
+
+const XLSX_CURRENCY = '"R$ "#,##0.00';
+// estilos (índices de cellXfs em estilosXlsx_)
+const XLSX_ESTILO = { padrao: 0, cabecalho: 1, moeda: 2, data: 3, quebra: 4, total: 5, totalMoeda: 6,
+                      totalNfs: 7, totalNfsAtraso: 8, totalAtraso: 9 };
+// formato de cada célula da linha de totais (o mesmo da planilha)
+const XLSX_ESTILO_TOTAL = {
+  'Emissão': XLSX_ESTILO.totalNfs, 'Valor (R$)': XLSX_ESTILO.totalMoeda,
+  'Saldo em aberto (R$)': XLSX_ESTILO.totalMoeda, 'Filial Vibra (CNPJ)': XLSX_ESTILO.totalNfsAtraso,
+  'Material': XLSX_ESTILO.totalAtraso,
+};
+const XLSX_COLUNAS_MOEDA = ['Valor (R$)', 'Saldo em aberto (R$)'];
+const XLSX_COLUNAS_QUEBRA = ['Material', 'Cliente final', 'Obs. Emissão', 'Obs. financeiro'];
+
+/** Arquivos do .xlsx ({caminho no zip: XML}). `cabecalho` e cada linha têm
+ * todas as colunas da aba; `colunas` são os índices que entram, `larguras`
+ * as larguras delas em pixels. */
+function partesXlsx(cabecalho, linhas, total, colunas, larguras) {
+  const ref = (c, r) => `${letraColuna_(c)}${r}`;
+  const celula = (c, r, valor, estilo) => {
+    if (valor === null || valor === undefined || valor === '') {
+      return estilo ? `<c r="${ref(c, r)}" s="${estilo}"/>` : '';
+    }
+    const serial = serialCelula_(valor);
+    if (serial !== null) return `<c r="${ref(c, r)}" s="${XLSX_ESTILO.data}"><v>${serial}</v></c>`;
+    if (typeof valor === 'number') return `<c r="${ref(c, r)}" s="${estilo || 0}"><v>${valor}</v></c>`;
+    return `<c r="${ref(c, r)}" t="inlineStr" s="${estilo || 0}"><is><t xml:space="preserve">`
+      + `${xmlEscapar_(String(valor))}</t></is></c>`;
+  };
+  const estiloDados = nome => (XLSX_COLUNAS_MOEDA.indexOf(nome) >= 0 ? XLSX_ESTILO.moeda
+    : XLSX_COLUNAS_QUEBRA.indexOf(nome) >= 0 ? XLSX_ESTILO.quebra : XLSX_ESTILO.padrao);
+
+  const xmlLinhas = [];
+  xmlLinhas.push(`<row r="1">${colunas.map((i, c) => celula(c, 1, cabecalho[i], XLSX_ESTILO.cabecalho)).join('')}</row>`);
+  linhas.forEach((linha, n) => {
+    xmlLinhas.push(`<row r="${n + 2}">`
+      + colunas.map((i, c) => celula(c, n + 2, linha[i], estiloDados(cabecalho[i]))).join('') + '</row>');
+  });
+  if (total) {
+    const r = linhas.length + 2;
+    const celulas = colunas.map((i, c) => {
+      const valor = c === 0 && !texto_(total[i]) ? MARCA_LINHA_TOTAL : total[i];
+      return celula(c, r, valor, XLSX_ESTILO_TOTAL[cabecalho[i]] || XLSX_ESTILO.total);
+    });
+    xmlLinhas.push(`<row r="${r}">${celulas.join('')}</row>`);
+  }
+  const cols = colunas.map((i, c) =>
+    `<col min="${c + 1}" max="${c + 1}" width="${Math.max(6, Math.round((larguras[c] || 100) / 7))}" customWidth="1"/>`);
+
+  const ns = 'http://schemas.openxmlformats.org';
+  const cabecalhoXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  return {
+    '[Content_Types].xml': cabecalhoXml
+      + `<Types xmlns="${ns}/package/2006/content-types">`
+      + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+      + '<Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" '
+      + 'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/worksheets/sheet1.xml" '
+      + 'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      + '<Override PartName="/xl/styles.xml" '
+      + 'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + '</Types>',
+    '_rels/.rels': cabecalhoXml
+      + `<Relationships xmlns="${ns}/package/2006/relationships">`
+      + `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/officeDocument" `
+      + 'Target="xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml': cabecalhoXml
+      + `<workbook xmlns="${ns}/spreadsheetml/2006/main" xmlns:r="${ns}/officeDocument/2006/relationships">`
+      + '<sheets><sheet name="Controle Vibra" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels': cabecalhoXml
+      + `<Relationships xmlns="${ns}/package/2006/relationships">`
+      + `<Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/worksheet" `
+      + 'Target="worksheets/sheet1.xml"/>'
+      + `<Relationship Id="rId2" Type="${ns}/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+      + '</Relationships>',
+    'xl/styles.xml': cabecalhoXml + estilosXlsx_(),
+    'xl/worksheets/sheet1.xml': cabecalhoXml
+      + `<worksheet xmlns="${ns}/spreadsheetml/2006/main">`
+      + '<sheetViews><sheetView workbookViewId="0">'
+      + '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+      + `<cols>${cols.join('')}</cols>`
+      + `<sheetData>${xmlLinhas.join('')}</sheetData></worksheet>`,
+  };
+}
+
+function estilosXlsx_() {
+  const q = texto => texto.replace(/"/g, '&quot;');
+  const formatos = [
+    [164, XLSX_CURRENCY], [165, 'dd/mm/yyyy'], [166, '0" NF(s)"'], [167, '0" NF(s) em atraso"'],
+    [168, '"Em atraso: R$ "#,##0.00'],
+  ];
+  const xf = (numFmt, fonte, fundo, extra) =>
+    `<xf numFmtId="${numFmt}" fontId="${fonte}" fillId="${fundo}" borderId="0" xfId="0"`
+    + `${numFmt ? ' applyNumberFormat="1"' : ''}${fonte ? ' applyFont="1"' : ''}${fundo ? ' applyFill="1"' : ''}`
+    + (extra ? ` applyAlignment="1">${extra}</xf>` : '/>');
+  const quebra = '<alignment wrapText="1" vertical="top"/>';
+  return '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + `<numFmts count="${formatos.length}">`
+    + formatos.map(([id, codigo]) => `<numFmt numFmtId="${id}" formatCode="${q(codigo)}"/>`).join('')
+    + '</numFmts>'
+    + '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font>'
+    + '<font><b/><sz val="10"/><name val="Arial"/></font>'
+    + '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts>'
+    + '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FF356854"/></patternFill></fill>'
+    + '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill></fills>'
+    + '<borders count="1"><border/></borders>'
+    + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    + '<cellXfs count="10">'
+    + xf(0, 0, 0)                                                              // padrao
+    + xf(0, 2, 2, '<alignment horizontal="center" vertical="center" wrapText="1"/>')  // cabecalho
+    + xf(164, 0, 0)                                                            // moeda
+    + xf(165, 0, 0, '<alignment horizontal="center"/>')                        // data
+    + xf(0, 0, 0, quebra)                                                      // quebra
+    + xf(0, 1, 3)                                                              // total
+    + xf(164, 1, 3)                                                            // totalMoeda
+    + xf(166, 1, 3)                                                            // totalNfs
+    + xf(167, 1, 3)                                                            // totalNfsAtraso
+    + xf(168, 1, 3)                                                            // totalAtraso
+    + '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    + '</styleSheet>';
+}
+
+function xmlEscapar_(texto) {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    // caractere de controle não é XML válido (o Excel recusa o arquivo)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+}
+
+
+// ============================================================================
 // HTML do painel e imagem do botão
 // ============================================================================
 const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
@@ -429,6 +604,8 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
     border-radius: 6px; cursor: pointer; }
   button.filtro.especial { background: #ffd666; border-color: #356854; font-weight: bold; color: #356854; }
   button.filtro.especial:hover { background: #ffe08a; }
+  button.excel { display: block; width: 100%; margin: 0 0 10px; padding: 8px 10px; background: #356854;
+    color: #fff; border: 0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; }
   button.limpar { margin-top: 14px; padding: 6px 12px; background: #fff; color: #356854;
     border: 1px solid #356854; border-radius: 6px; cursor: pointer; width: 100%; }
   #resultado { margin-top: 14px; padding: 10px; background: #f1f3f4; border-radius: 6px; min-height: 18px; }
@@ -437,6 +614,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+  <button class="excel" onclick="baixarExcel()">⬇ Baixar em Excel o que está na tela</button>
   <button class="filtro especial" onclick="aplicar('controle_vibra')">Atualizar o controle da Vibra
     <small>Em aberto e entregues (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, S e T.
     Escolha outro filtro ou "Mostrar todas" para voltar as colunas</small></button>
@@ -492,6 +670,23 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
   function aplicarPeriodo() {
     aplicar('pagos_periodo', document.getElementById('de').value, document.getElementById('ate').value);
   }
+  function baixarExcel() {
+    document.getElementById('resultado').textContent = 'Gerando o arquivo...';
+    google.script.run.withSuccessHandler(r => {
+      baixarArquivo(r);
+      document.getElementById('resultado').innerHTML = '<b>' + r.nome + '</b>' + r.nfs + ' NF(s) no arquivo. '
+        + 'Se o download não começou, <a id="baixar" href="#">clique aqui</a>.';
+      document.getElementById('baixar').onclick = e => { e.preventDefault(); baixarArquivo(r); };
+    }).withFailureHandler(erro).gerarExcelFiltrado();
+  }
+  function baixarArquivo(r) {
+    const a = document.createElement('a');
+    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + r.base64;
+    a.download = r.nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
   function limpar() {
     aguarde();
     google.script.run.withSuccessHandler(mostrar).withFailureHandler(erro).limparFiltroVibra();
@@ -517,3 +712,29 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 // botão "Filtrar NFs" (PNG 280x64, exibido em 114x26): amarelo com borda branca
 // pra destacar da faixa verde da linha 1, onde fica
 const BOTAO_FILTROS_PNG = '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';
+
+// janela do menu "Baixar em Excel": gera e baixa assim que abre
+const HTML_DOWNLOAD_EXCEL = `<!DOCTYPE html>
+<html><head><base target="_top">
+<style>body { font-family: Arial, sans-serif; font-size: 13px; margin: 12px; } a { color: #356854; }</style>
+</head><body>
+<div id="msg">Gerando o arquivo com o que está na tela...</div>
+<script>
+  function baixar(r) {
+    const a = document.createElement('a');
+    a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + r.base64;
+    a.download = r.nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  google.script.run.withSuccessHandler(r => {
+    baixar(r);
+    document.getElementById('msg').innerHTML = '<b>' + r.nome + '</b><br>' + r.nfs + ' NF(s). '
+      + 'Se o download não começou, <a id="link" href="#">clique aqui</a>.';
+    document.getElementById('link').onclick = e => { e.preventDefault(); baixar(r); };
+  }).withFailureHandler(e => {
+    document.getElementById('msg').textContent = e.message || e;
+  }).gerarExcelFiltrado();
+</script>
+</body></html>`;

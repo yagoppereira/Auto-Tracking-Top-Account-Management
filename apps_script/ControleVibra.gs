@@ -199,6 +199,7 @@ function onOpen() {
     .createMenu('Controle Vibra')
     .addItem('Atualizar agora', 'atualizarControleVibra')
     .addItem('Filtros', 'abrirFiltros')
+    .addItem('Baixar em Excel o que está na tela', 'abrirDownloadExcel')
     .addSeparator()
     .addItem('Agendar atualização diária', 'agendarAtualizacaoDiaria')
     .addItem('Remover agendamento', 'removerAgendamento')

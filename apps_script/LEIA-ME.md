@@ -48,6 +48,11 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   planilha aberta; **Todas as NFs** tira o filtro. **Atualizar o controle da
   Vibra** (em aberto e entregues) também oculta as colunas fora de A, C, D,
   F, G, H, I, J, O, S e T; qualquer outra opção mostra todas de novo.
+- **Controle Vibra > Baixar em Excel o que está na tela** (ou o botão no
+  painel): gera um `.xlsx` com o cabeçalho, as NFs visíveis no filtro, as
+  colunas visíveis e a linha de totais. O arquivo é montado no próprio script
+  (um .xlsx é um zip de XMLs, `partesXlsx` + `Utilities.zip`), sem arquivo
+  temporário no Drive e sem permissão nova.
 - **Controle Vibra > Filtros**: painel lateral com os mesmos filtros, atalhos
   de período e o resumo (NFs, valor e saldo).
 - **Botão amarelo "Filtrar NFs"** (começo da faixa verde, em G1): abre o
