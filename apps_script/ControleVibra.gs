@@ -319,7 +319,7 @@ function atualizarControleVibra() {
     const atual = aba.getDataRange().getValues();
     const tabela = montarTabela(consultarNotasVibra_(), atual, DESDE_PADRAO, valoresLocais, valoresImportacao);
     const agora = new Date();
-    gravarControle_(aba, tabela, agora);
+    gravarControle_(aba, tabela, agora, atual);
     atualizarFontes_(planilha, agora, tabela.length);
     const novos = locaisSemCadastro(tabela, lerLocaisEntrega(valoresLocais));
     if (novos.length) {
@@ -389,7 +389,7 @@ function consultarNotasVibra_() {
   });
 }
 
-function gravarControle_(aba, tabela, agora) {
+function gravarControle_(aba, tabela, agora, anterior) {
   const nDw = COLUNAS_DW.length;
   const nColunas = nDw + 1 + COLUNAS_MANUAIS.length;
   const totaisAntigos = linhasDeTotal_(aba);
@@ -403,14 +403,29 @@ function gravarControle_(aba, tabela, agora) {
     aba.insertRowsAfter(aba.getMaxRows(), necessarias - aba.getMaxRows());
   }
   const sobra = aba.getMaxRows() - PRIMEIRA_LINHA_DADOS + 1;
-  aba.getRange(PRIMEIRA_LINHA_DADOS, 1, sobra, nColunas).clearContent();
-  if (tabela.length) {
-    // a coluna do cliente final fica vazia pro ARRAYFORMULA da linha 2 se espalhar
-    const linhas = linhasParaPlanilha(tabela);
-    aba.getRange(PRIMEIRA_LINHA_DADOS, 1, linhas.length, nDw).setValues(linhas.map(l => l.slice(0, nDw)));
-    aba.getRange(PRIMEIRA_LINHA_DADOS, nDw + 2, linhas.length, COLUNAS_MANUAIS.length)
-      .setValues(linhas.map(l => l.slice(nDw + 1)));
+  // a lista suspensa e as datas com validação rígida recusam valor no
+  // setValues (aconteceu com a NF comodato na coluna que herdou a lista do
+  // Status entrega): grava sem validação e reaplica as do layout no fim. Se
+  // a gravação falhar mesmo assim, a aba volta ao que estava antes.
+  aba.getRange(PRIMEIRA_LINHA_DADOS, nDw + 2, sobra, COLUNAS_MANUAIS.length).clearDataValidations();
+  try {
+    aba.getRange(PRIMEIRA_LINHA_DADOS, 1, sobra, nColunas).clearContent();
+    if (tabela.length) {
+      // a coluna do cliente final fica vazia pro ARRAYFORMULA da linha 2 se espalhar
+      const linhas = linhasParaPlanilha(tabela);
+      aba.getRange(PRIMEIRA_LINHA_DADOS, 1, linhas.length, nDw).setValues(linhas.map(l => l.slice(0, nDw)));
+      aba.getRange(PRIMEIRA_LINHA_DADOS, nDw + 2, linhas.length, COLUNAS_MANUAIS.length)
+        .setValues(linhas.map(l => l.slice(nDw + 1)));
+    }
+  } catch (erro) {
+    const nfs = restaurarAnterior_(aba, anterior);
+    aplicarValidacoesManuais_(aba, Math.max(nfs, 1));
+    if (nfs) gravarLinhaTotal_(aba, nfs);
+    ajustarFiltro_(aba, PRIMEIRA_LINHA_DADOS + Math.max(nfs, 1) - 1);
+    throw new Error(`Não consegui gravar o controle (${erro.message}). A aba voltou ao que estava antes `
+      + 'da atualização; nada do que o time preencheu se perdeu.');
   }
+  aplicarValidacoesManuais_(aba, Math.max(tabela.length, 1));
   const linhaTotalNova = PRIMEIRA_LINHA_DADOS + tabela.length;
   // linha de totais anterior que agora é NF (ou sobra) volta ao formato das NFs
   totaisAntigos.filter(r => r !== linhaTotalNova && r !== PRIMEIRA_LINHA_DADOS).forEach(r =>
@@ -423,6 +438,34 @@ function gravarControle_(aba, tabela, agora) {
   const colunaTitulo = Math.max(linha1.findIndex(v => String(v).startsWith('Do CIGAM')), 0) + 1;
   aba.getRange(1, colunaTitulo).setValue(
     `Do CIGAM (extrator, atualizado em ${Utilities.formatDate(agora, fusoDaPlanilha_(), 'dd/MM/yyyy HH:mm')})`);
+}
+
+/** Volta as colunas do CIGAM (A até a NF de remessa) e as do time ao que
+ * estava na aba antes da atualização (`anterior` = getValues da aba, já no
+ * layout atual) e devolve quantas NFs voltaram. O cliente final é fórmula e
+ * não é tocado; a linha de totais é refeita por quem chama. */
+function restaurarAnterior_(aba, anterior) {
+  const nDw = COLUNAS_DW.length;
+  const linhas = (anterior || []).slice(PRIMEIRA_LINHA_DADOS - 1).filter(l => texto_(l[0]));
+  if (!linhas.length) return 0;
+  const largura = (l, inicio, n) => Array.from({ length: n }, (_, i) => (l[inicio + i] === undefined ? '' : l[inicio + i]));
+  aba.getRange(PRIMEIRA_LINHA_DADOS, 1, linhas.length, nDw).setValues(linhas.map(l => largura(l, 0, nDw)));
+  aba.getRange(PRIMEIRA_LINHA_DADOS, nDw + 2, linhas.length, COLUNAS_MANUAIS.length)
+    .setValues(linhas.map(l => largura(l, nDw + 1, COLUNAS_MANUAIS.length)));
+  return linhas.length;
+}
+
+/** Validações das colunas do time nas linhas das NFs: lista suspensa do
+ * Status entrega (aba Listas) e data nas colunas de data. */
+function aplicarValidacoesManuais_(aba, qtd) {
+  const coluna = nome => COLUNAS_PLANILHA.indexOf(nome) + 1;
+  const faixa = nome => aba.getRange(PRIMEIRA_LINHA_DADOS, coluna(nome), qtd, 1);
+  faixa('Status entrega').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInRange(SpreadsheetApp.getActive().getRange(`${ABA_LISTAS}!$A$2:$A$20`), true)
+    .setAllowInvalid(false).build());
+  ['Data instalação', 'Data entrega / NF assinada'].forEach(nome => faixa(nome).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false)
+      .setHelpText('Informe uma data (dd/mm/aaaa)').build()));
 }
 
 /** Linha de totais pra `qtd` NFs (linhas 3 em diante), com o separador de
@@ -522,10 +565,25 @@ function migrarLayout_(aba) {
         .setHelpText('Informe uma data (dd/mm/aaaa)').build());
     }
   };
+  // "Situação NF assinada" foi criada por uma versão intermediária do script
+  // e trocada por "Data instalação": sai se estiver vazia
+  const obsoleta = cabecalho().indexOf('Situação NF assinada');
+  if (obsoleta >= 0) {
+    const n = Math.max(aba.getLastRow() - linhaCabecalho, 1);
+    const vazia = aba.getRange(linhaCabecalho + 1, obsoleta + 1, n, 1).getDisplayValues().every(l => !l[0]);
+    if (vazia) aba.deleteColumn(obsoleta + 1);
+  }
   garantir('NF de remessa', 'Local de entrega (nº)', 95, false);
   // colunas da planilha do operacional, no bloco da Emissão
   garantir('NF comodato Vibra', 'Status entrega', 120, false);
   garantir('Data instalação', 'NF comodato Vibra', 110, true);
+  // NF comodato é texto livre: tira a lista suspensa que a coluna possa ter
+  // herdado do Status entrega numa migração anterior
+  const comodato = cabecalho().indexOf('NF comodato Vibra');
+  if (comodato >= 0) {
+    aba.getRange(PRIMEIRA_LINHA_DADOS, comodato + 1, aba.getMaxRows() - PRIMEIRA_LINHA_DADOS + 1, 1)
+      .clearDataValidations().setNumberFormat('@');
+  }
 }
 
 /** Aba Listas: status de entrega com a próxima ação (lista suspensa e
