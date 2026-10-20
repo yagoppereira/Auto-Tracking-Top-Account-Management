@@ -45,6 +45,7 @@ const COLUNAS_DW = [
   'NF', 'Série', 'Emissão', 'Vencimento', 'Valor (R$)', 'Saldo em aberto (R$)',
   'Nº Pedido Vibra', 'Filial Vibra (CNPJ)', 'Tipo de NF', 'Material',
   'Status financeiro', 'Data pagamento / baixa', 'NF de devolução', 'Local de entrega (nº)',
+  'NF de remessa',
 ];
 const CABECALHO_LOCAIS = [
   'Filial Vibra (CNPJ)', 'Local de entrega (nº)', 'Cliente final', 'Cód. CIGAM do cliente final', 'Origem',
@@ -103,10 +104,22 @@ notas AS (
             UNICODE(n.ordemEnderecoEntrega) - 32
             - (SELECT COUNT(*) FROM UNNEST([39, 42, 63, 92]) AS pulado
                WHERE pulado < UNICODE(n.ordemEnderecoEntrega))) AS localEntrega,
-         SAFE_CAST(n.totalNF AS NUMERIC) AS totalNF, n.itensNf_json
+         SAFE_CAST(n.totalNF AS NUMERIC) AS totalNF, n.itensNf_json,
+         NULLIF(TRIM(n.ordemCompra), '') AS pedidoRemessa
   FROM \`${PROJECT_ID}.bronze.cigam__notas_fiscais\` n
   WHERE n.dataEmissao >= @piso AND n.cliente IN (SELECT codigo FROM vibra)
     AND n.especieNota IN ('S', 'N') AND n.tipoNota IN ('E', 'N')
+),
+-- venda triangular: a NF da Vibra (CFOP 6119/6118, venda à ordem) só fatura;
+-- o material vai com a NF de remessa por conta e ordem (CFOP 5923/6923) pro
+-- cliente final, que é a que ele assina. A NF da Vibra guarda em ordemCompra
+-- o pedido interno da remessa (ex.: NF 25263 -> pedido 009525 -> NF 25265).
+remessas AS (
+  SELECT TRIM(pedido) AS pedido, STRING_AGG(DISTINCT nf, ', ' ORDER BY nf) AS nfs_remessa,
+         ANY_VALUE(cliente) AS cliente_remessa
+  FROM \`${PROJECT_ID}.bronze.cigam__notas_fiscais\`
+  WHERE dataEmissao >= @piso AND especieNota = 'S' AND CFOP IN ('5923', '6923')
+  GROUP BY 1
 ),
 -- NF de entrada (D = devolução, C = complementar) que a Vibra emite
 -- referenciando a nossa NF: é assim que um "cancelamento" depois de 24 h
@@ -181,9 +194,13 @@ SELECT n.nf, n.serie, n.cliente, v.cnpj, n.dataEmissao AS emissao, n.status,
        n.dataCancelamento AS data_cancelamento, n.totalNF AS total_nf,
        t.vencimento, t.valor_titulo, t.pago, t.abatido, t.perda, t.data_baixa,
        d.nfs_devolucao, d.data_devolucao, n.localEntrega AS local_entrega,
-       i.material, i.tem_cta, i.tem_sonda, i.tem_licenciamento, i.textos
+       i.material, i.tem_cta, i.tem_sonda, i.tem_licenciamento, i.textos,
+       r.nfs_remessa AS nf_remessa, r.cliente_remessa, e.nomeCompleto AS nome_remessa,
+       e.municipio AS municipio_remessa, e.uf AS uf_remessa
 FROM notas n
 JOIN vibra v ON v.codigo = n.cliente
+LEFT JOIN remessas r ON r.pedido = n.pedidoRemessa
+LEFT JOIN \`${PROJECT_ID}.bronze.cigam__empresas\` e ON e.codigo = r.cliente_remessa
 LEFT JOIN titulos t ON t.nf = n.nf AND t.serie = n.serie AND t.codigoEmpresa = n.cliente
 LEFT JOIN devolucoes d ON d.nf = n.nf AND d.serie = n.serie AND d.cliente = n.cliente
 LEFT JOIN itens_nf i ON i.nf = n.nf AND i.serie = n.serie AND i.cliente = n.cliente
@@ -250,6 +267,7 @@ function atualizarControleVibra() {
     }
     const valoresLocais = abaLocais.getDataRange().getValues();
 
+    migrarLayout_(aba);
     const atual = aba.getDataRange().getValues();
     const tabela = montarTabela(consultarNotasVibra_(), atual, DESDE_PADRAO, valoresLocais);
     const agora = new Date();
@@ -427,6 +445,20 @@ function ajustarFiltro_(aba, ultimaLinhaNf) {
   if (typeof aplicarFiltroRapido_ === 'function' && filtroRapidoMontado_(aba)) aplicarFiltroRapido_(aba);
 }
 
+/** Planilha no layout anterior à coluna "NF de remessa": insere a coluna
+ * depois do local de entrega. Inserir (e não regravar) leva junto as
+ * fórmulas, filtros, formatos e mesclagens das colunas da direita. */
+function migrarLayout_(aba) {
+  const linhaCabecalho = PRIMEIRA_LINHA_DADOS - 1;
+  const cabecalho = aba.getRange(linhaCabecalho, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
+  if (cabecalho.indexOf('NF de remessa') >= 0) return;
+  const local = cabecalho.indexOf('Local de entrega (nº)');
+  if (local < 0) return;
+  aba.insertColumnAfter(local + 1);
+  aba.getRange(linhaCabecalho, local + 2).setValue('NF de remessa');
+  aba.setColumnWidth(local + 2, 95);
+}
+
 function atualizarFontes_(planilha, agora, linhas) {
   const fontes = planilha.getSheetByName(ABA_FONTES);
   if (!fontes) return;
@@ -543,8 +575,22 @@ function montarControle(linhasDw) {
       'Data pagamento / baixa': st.data,
       'NF de devolução': texto_(linha.nfs_devolucao),
       'Local de entrega (nº)': inteiro_(linha.local_entrega),
+      'NF de remessa': texto_(linha.nf_remessa),
+      _clienteRemessa: nomeClienteRemessa(linha.nome_remessa, linha.municipio_remessa, linha.uf_remessa),
+      _codigoRemessa: texto_(linha.cliente_remessa),
     };
   });
+}
+
+/** "CIA. DE FERRO LIGAS DA BAHIA - FERBASA (Pojuca/BA)": o cliente da NF de
+ * remessa no formato da aba Locais de entrega. */
+function nomeClienteRemessa(nome, municipio, uf) {
+  nome = texto_(nome);
+  if (!nome) return '';
+  const cidade = texto_(municipio).split(/\s+/).filter(p => p)
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  const local = [cidade, texto_(uf).toUpperCase()].filter(x => x).join('/');
+  return local ? `${nome} (${local})` : nome;
 }
 
 function chaveNf(nf, serie) {
@@ -630,17 +676,29 @@ function locaisSemCadastro(tabela, locais) {
   tabela.forEach(l => {
     const chave = chaveLocal(l['Filial Vibra (CNPJ)'], l['Local de entrega (nº)']);
     if (chave === null || chave in locais) return;
-    if (!vistos[chave]) vistos[chave] = { cnpj: l['Filial Vibra (CNPJ)'], numero: l['Local de entrega (nº)'], nfs: [] };
-    vistos[chave].nfs.push(l['NF']);
+    if (!vistos[chave]) {
+      vistos[chave] = { cnpj: l['Filial Vibra (CNPJ)'], numero: l['Local de entrega (nº)'], nfs: [], remessas: [],
+                        cliente: '', codigo: '' };
+    }
+    const v = vistos[chave];
+    v.nfs.push(l['NF']);
+    if (l._clienteRemessa && !v.cliente) {
+      v.cliente = l._clienteRemessa;
+      v.codigo = l._codigoRemessa || '';
+    }
+    if (l['NF de remessa']) v.remessas.push(l['NF de remessa']);
   });
+  const ordem = lista => lista.slice().sort((x, y) => (Number(x) || 0) - (Number(y) || 0)).join(', ');
   return Object.keys(vistos)
     .map(chave => vistos[chave])
     .sort((a, b) => (a.cnpj.replace(/\D/g, '') < b.cnpj.replace(/\D/g, '') ? -1
       : a.cnpj.replace(/\D/g, '') > b.cnpj.replace(/\D/g, '') ? 1 : a.numero - b.numero))
     .map(v => {
-      const nfs = v.nfs.slice().sort((x, y) => (Number(x) || 0) - (Number(y) || 0)).join(', ');
-      const origem = v.nfs.length === 1 ? `Preencher: visto na NF ${nfs}` : `Preencher: visto nas NFs ${nfs}`;
-      return [`'${v.cnpj}`, v.numero, '', '', origem];
+      const nfs = ordem(v.nfs);
+      let origem;
+      if (v.cliente) origem = `Cliente da NF de remessa ${ordem(v.remessas)} (preenchido pelo extrator)`;
+      else origem = v.nfs.length === 1 ? `Preencher: visto na NF ${nfs}` : `Preencher: visto nas NFs ${nfs}`;
+      return [`'${v.cnpj}`, v.numero, v.cliente, v.codigo ? `'${v.codigo}` : '', origem];
     });
 }
 
@@ -698,6 +756,7 @@ function linhasParaPlanilha(tabela) {
       l['Data pagamento / baixa'] || '',
       protegido(l['NF de devolução']),
       l['Local de entrega (nº)'] === null ? '' : l['Local de entrega (nº)'],
+      protegido(l['NF de remessa']),
       '',
     ].concat(COLUNAS_MANUAIS.map(nome => l[nome]));
   });

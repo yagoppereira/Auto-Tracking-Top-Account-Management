@@ -29,14 +29,17 @@ service account: basta a pessoa conseguir rodar consultas no projeto
 
 ## Usar
 
-- **Controle Vibra > Atualizar agora**: reescreve as colunas A a N a partir do
-  CIGAM e preserva as colunas P a S preenchidas pelo time.
-- A coluna O (**Cliente final**) é fórmula: procura a filial Vibra + o nº do
+- **Controle Vibra > Atualizar agora**: reescreve as colunas A a O a partir do
+  CIGAM (O = NF de remessa da venda triangular) e preserva as colunas Q a T
+  preenchidas pelo time. Numa planilha anterior à coluna "NF de remessa", a
+  primeira atualização insere a coluna depois do local de entrega.
+- A coluna P (**Cliente final**) é fórmula: procura a filial Vibra + o nº do
   "Local de Entrega" da aba Transporte da NF no CIGAM na aba **Locais de
   entrega**. Para corrigir ou cadastrar um cliente final, edite só lá: todas
   as NFs daquele local mudam na hora, sem precisar atualizar. Local que
   aparece numa NF e ainda não está na aba é acrescentado no fim dela com o
-  cliente final em branco, e a NF mostra "Cadastrar na aba Locais de entrega".
+  cliente da NF de remessa (venda triangular); sem remessa, fica em branco e
+  a NF mostra "Cadastrar na aba Locais de entrega".
 - **Controle Vibra > Agendar atualização diária**: roda todo dia às 7h com o
   login de quem agendou. Se essa pessoa perder o acesso ao DW, o agendamento
   para de funcionar; outra pessoa com acesso agenda de novo.
@@ -47,7 +50,7 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   O filtro é o filtro comum da aba, igual pra todo mundo que está com a
   planilha aberta; **Todas as NFs** tira o filtro. **Atualizar o controle da
   Vibra** (em aberto e entregues) também oculta as colunas fora de A, C, D,
-  F, G, H, I, J, O, S e T; qualquer outra opção mostra todas de novo.
+  F, G, H, I, J, O, P, T e U; qualquer outra opção mostra todas de novo.
 - **Controle Vibra > Baixar em Excel o que está na tela** (ou o botão no
   painel): gera um `.xlsx` com o cabeçalho, as NFs visíveis no filtro, as
   colunas visíveis e a linha de totais. O arquivo é montado no próprio script
@@ -66,7 +69,7 @@ SUBTOTAL, que só conta as linhas visíveis no filtro. O filtro da aba vai até 
 script move a linha, ajusta o filtro e reaplica o filtro rápido de A1.
 
 O script só grava valores: a formatação, as listas suspensas e as fórmulas das
-colunas O, T e U (linha 2) já estão na planilha. Para refazer a formatação do
+colunas P, U e V (linha 2) já estão na planilha. Para refazer a formatação do
 zero, rode o extrator em Python (`controle_vibra.py`), que reaplica o layout.
 
 ## Erros comuns

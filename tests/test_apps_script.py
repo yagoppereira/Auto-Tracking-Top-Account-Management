@@ -75,6 +75,10 @@ CASOS = [
           valor_titulo=Decimal("4561.68"), total_nf=Decimal("4561.68"), tem_licenciamento=True),
     nf_dw(nf="25441", emissao=date(2026, 8, 21), vencimento=date(2026, 9, 20), tem_cta=False,
           textos="OC 4503906558 e OC 4504019219 e de novo 4503906558"),
+    nf_dw(nf="25263", emissao=date(2026, 8, 13), vencimento=date(2026, 9, 12), cnpj="34274233008006",
+          local_entrega=3, nf_remessa="25265", cliente_remessa="006456",
+          nome_remessa="CIA. DE FERRO LIGAS DA BAHIA - FERBASA", municipio_remessa="POJUCA",
+          uf_remessa="BA"),                                                            # triangular
 ]
 
 
@@ -206,9 +210,9 @@ def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
     ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
                for inicio, quantidade in saida["ocultas_controle_vibra"] for i in range(quantidade)}
     visiveis = {cv._letra(nome) for nome in cv.COLUNAS} - ocultas
-    assert visiveis == set("ACDFGHIJOST")
+    assert visiveis == set("ACDFGHIJOPTU")  # O = NF de remessa
     # faixas contíguas: uma chamada de ocultar por faixa
-    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [16, 3], [21, 1]]
+    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 3], [22, 1]]
 
 
 
@@ -232,7 +236,7 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
     total[cv.COLUNAS.index("Saldo em aberto (R$)")] = 4561.68
     total[cv.COLUNAS.index("Material")] = 4561.68
     # colunas da visão "Atualizar o controle da Vibra": A C D F G H I J O S T
-    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOST"]
+    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOPTU"]
     partes = _rodar_node({"xlsx": {"cabecalho": cabecalho, "linhas": [linha], "total": total,
                                    "colunas": colunas, "larguras": [70] * len(colunas)}})
 
@@ -245,8 +249,8 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
     linhas = [[c.value for c in r] for r in aba.iter_rows()]
 
     assert linhas[0] == ["NF", "Emissão", "Vencimento", "Saldo em aberto (R$)", "Nº Pedido Vibra",
-                         "Filial Vibra (CNPJ)", "Tipo de NF", "Material", "Cliente final", "Obs. financeiro",
-                         "Dias em atraso"]
+                         "Filial Vibra (CNPJ)", "Tipo de NF", "Material", "NF de remessa", "Cliente final",
+                         "Obs. financeiro", "Dias em atraso"]
     nf = dict(zip(linhas[0], linhas[1]))
     assert nf["NF"] == 21903 and nf["Saldo em aberto (R$)"] == 4561.68 and nf["Dias em atraso"] == 116
     assert nf["Emissão"] == datetime(2026, 5, 26)

@@ -105,7 +105,7 @@ def test_formatar_cnpj():
 def test_montar_controle_preenche_colunas_do_dw():
     controle = cv.montar_controle(pd.DataFrame([nf_dw(textos="OC: 4503762321")]))
     linha = controle.iloc[0]
-    assert list(controle.columns) == cv.COLUNAS_DW
+    assert list(controle.columns) == cv.COLUNAS_DW + cv.COLUNAS_INTERNAS
     assert linha["NF"] == "21897" and linha["Série"] == "2"
     assert linha["Valor (R$)"] == 35861.37 and linha["Saldo em aberto (R$)"] == 35861.37
     assert linha["Nº Pedido Vibra"] == "4503762321"
@@ -216,7 +216,7 @@ def test_valores_da_aba_tem_texto_protegido_e_formulas_no_cabecalho():
     assert all(len(linha) == len(cv.COLUNAS) for linha in valores)
     assert valores[0][0] == "Todas as NFs"  # filtro rápido
     assert valores[0][cv.COLUNA_TITULO] == "Do CIGAM (extrator, atualizado em 19/10/2026 09:30)"
-    assert valores[1][:14] == cv.COLUNAS_DW
+    assert valores[1][:len(cv.COLUNAS_DW)] == cv.COLUNAS_DW
     assert valores[1][-2].startswith('={"Dias em atraso"') and valores[1][-1].startswith('={"Próxima ação"')
     dados = valores[2]
     assert dados[0] == 21897 and dados[1] == "'2"
@@ -228,10 +228,10 @@ def test_valores_da_aba_tem_texto_protegido_e_formulas_no_cabecalho():
 
 def test_formulas_apontam_pras_colunas_certas():
     assert cv._letra("Status financeiro") == "K"
-    assert cv._letra("Status entrega") == "P"
-    assert cv._letra("Próxima ação") == "U"
+    assert cv._letra("Status entrega") == "Q"
+    assert cv._letra("Próxima ação") == "V"
     assert "K3:K" in cv.formula_dias_em_atraso() and "D3:D" in cv.formula_dias_em_atraso()
-    assert "VLOOKUP(P3:P;Listas!$A$2:$B$20" in cv.formula_proxima_acao()
+    assert "VLOOKUP(Q3:Q;Listas!$A$2:$B$20" in cv.formula_proxima_acao()
 
 
 def test_resumo_cobre_todos_os_status_e_acoes():
@@ -469,8 +469,8 @@ def test_cliente_final_e_formula_pela_aba_de_locais():
     assert 'REGEXREPLACE(H3:H&"";"\\D";"")&"|"&N3:N' in formula
     assert "HSTACK(REGEXREPLACE('Locais de entrega'!$A:$A" in formula
     assert "MATCH(" not in formula  # não roda linha a linha no ARRAYFORMULA
-    assert cv._letra("Cliente final") == "O" and cv._letra("Status entrega") == "P"
-    assert cv._letra("Próxima ação") == "U"
+    assert cv._letra("NF de remessa") == "O" and cv._letra("Cliente final") == "P"
+    assert cv._letra("Status entrega") == "Q" and cv._letra("Próxima ação") == "V"
 
 
 def test_locais_sem_cadastro_listam_as_nfs():
@@ -503,7 +503,7 @@ def test_linha_de_totais_soma_so_as_linhas_visiveis_e_fica_fora_do_filtro():
     assert linha[cv.COLUNAS.index("Emissão")] == "=SUBTOTAL(103;A3:A41)"
     assert linha[cv.COLUNAS.index("Saldo em aberto (R$)")] == "=SUBTOTAL(109;F3:F41)"
     assert linha[cv.COLUNAS.index("Material")] == (
-        "=SUM(MAP(F3:F41;T3:T41;LAMBDA(v;d;IF(d>0;SUBTOTAL(109;v);0))))")
+        "=SUM(MAP(F3:F41;U3:U41;LAMBDA(v;d;IF(d>0;SUBTOTAL(109;v);0))))")
     # nada nas colunas de fórmula da linha 2 (O, T, U), que quebraria o ARRAYFORMULA
     for nome in [cv.COLUNA_CLIENTE_FINAL] + cv.COLUNAS_FORMULA:
         assert linha[cv.COLUNAS.index(nome)] == ""
@@ -512,3 +512,24 @@ def test_linha_de_totais_soma_so_as_linhas_visiveis_e_fica_fora_do_filtro():
     filtro = next(r["setBasicFilter"]["filter"]["range"] for r in req if "setBasicFilter" in r)
     assert filtro["endRowIndex"] == 41  # até a última NF (linha 41); a 42 é a de totais
     assert any("updateBorders" in r and r["updateBorders"]["range"]["startRowIndex"] == 41 for r in req)
+
+
+def test_nf_de_remessa_e_cliente_final_da_venda_triangular():
+    controle = cv.montar_controle(pd.DataFrame([
+        nf_dw(nf="25263", cnpj="34274233008006", local_entrega=3, nf_remessa="25265", cliente_remessa="006456",
+              nome_remessa="CIA. DE FERRO LIGAS DA BAHIA - FERBASA", municipio_remessa="POJUCA", uf_remessa="BA"),
+        nf_dw(nf="25270", cnpj="34274233008006", local_entrega=3, nf_remessa="25271", cliente_remessa="006456",
+              nome_remessa="CIA. DE FERRO LIGAS DA BAHIA - FERBASA", municipio_remessa="POJUCA", uf_remessa="BA"),
+        nf_dw(nf="26049", cnpj="34274233000102", local_entrega=11),  # sem remessa no DW
+    ]))
+    assert controle.loc[0, "NF de remessa"] == "25265"
+    valores = cv.valores_aba_controle(cv.mesclar_manuais(controle, {}), datetime(2026, 10, 20))
+    assert valores[2][cv.COLUNAS.index("NF de remessa")] == "'25265"  # texto, como a NF de devolução
+
+    novos = cv.locais_sem_cadastro(controle, {})
+    assert novos[0] == ["'34.274.233/0001-02", 11, "", "", "Preencher: visto na NF 26049"]
+    assert novos[1] == ["'34.274.233/0080-06", 3, "CIA. DE FERRO LIGAS DA BAHIA - FERBASA (Pojuca/BA)", "'006456",
+                        "Cliente da NF de remessa 25265, 25271 (preenchido pelo extrator)"]
+    assert cv.nome_cliente_remessa("GERDAU ACOS LONGOS S.A.", "NOVA SANTA RITA", "rs") == (
+        "GERDAU ACOS LONGOS S.A. (Nova Santa Rita/RS)")
+    assert cv.nome_cliente_remessa(None, "X", "Y") == ""

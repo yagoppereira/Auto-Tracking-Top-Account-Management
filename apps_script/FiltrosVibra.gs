@@ -26,11 +26,11 @@
 const ENTREGA_CONCLUIDA = ['NF assinada recebida', 'Não se aplica'];
 
 // visão "Atualizar o controle da Vibra": só as colunas que interessam pra
-// atualizar o controle (A, C, D, F, G, H, I, J, O, S e T). Achadas pelo nome
+// atualizar o controle (A, C, D, F, G, H, I, J, O, P, T e U). Achadas pelo nome
 // do cabeçalho; as outras ficam ocultas até escolher outro filtro.
 const COLUNAS_CONTROLE_VIBRA = [
   'NF', 'Emissão', 'Vencimento', 'Saldo em aberto (R$)', 'Nº Pedido Vibra', 'Filial Vibra (CNPJ)',
-  'Tipo de NF', 'Material', 'Cliente final', 'Obs. financeiro', 'Dias em atraso',
+  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'Obs. financeiro', 'Dias em atraso',
 ];
 
 const FILTROS_VIBRA = {
@@ -616,7 +616,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 <body>
   <button class="excel" onclick="baixarExcel()">⬇ Baixar em Excel o que está na tela</button>
   <button class="filtro especial" onclick="aplicar('controle_vibra')">Atualizar o controle da Vibra
-    <small>Em aberto e entregues (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, S e T.
+    <small>Em aberto e entregues (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, P, T e U.
     Escolha outro filtro ou "Mostrar todas" para voltar as colunas</small></button>
 
   <h3>Financeiro</h3>

@@ -106,7 +106,10 @@ COLUNAS_DW = [
     "NF", "Série", "Emissão", "Vencimento", "Valor (R$)", "Saldo em aberto (R$)",
     "Nº Pedido Vibra", "Filial Vibra (CNPJ)", "Tipo de NF", "Material",
     "Status financeiro", "Data pagamento / baixa", "NF de devolução", "Local de entrega (nº)",
+    "NF de remessa",
 ]
+# cliente da NF de remessa: não vira coluna, preenche a aba Locais de entrega
+COLUNAS_INTERNAS = ["_cliente_remessa", "_codigo_remessa"]
 # o cliente final é fórmula na planilha (procura filial + nº do local na aba
 # Locais de entrega), pra que um local cadastrado lá apareça na hora em
 # todas as NFs, sem depender de rodar o extrator nem de alguém digitar
@@ -173,10 +176,22 @@ notas AS (
             UNICODE(n.ordemEnderecoEntrega) - 32
             - (SELECT COUNT(*) FROM UNNEST([39, 42, 63, 92]) AS pulado
                WHERE pulado < UNICODE(n.ordemEnderecoEntrega))) AS localEntrega,
-         SAFE_CAST(n.totalNF AS NUMERIC) AS totalNF, n.itensNf_json
+         SAFE_CAST(n.totalNF AS NUMERIC) AS totalNF, n.itensNf_json,
+         NULLIF(TRIM(n.ordemCompra), '') AS pedidoRemessa
   FROM `{PROJECT_ID}.bronze.cigam__notas_fiscais` n
   WHERE n.dataEmissao >= @piso AND n.cliente IN (SELECT codigo FROM vibra)
     AND n.especieNota IN ('S', 'N') AND n.tipoNota IN ('E', 'N')
+),
+-- venda triangular: a NF da Vibra (CFOP 6119/6118, venda à ordem) só fatura;
+-- o material vai com a NF de remessa por conta e ordem (CFOP 5923/6923) pro
+-- cliente final, que é a que ele assina. A NF da Vibra guarda em ordemCompra
+-- o pedido interno da remessa (ex.: NF 25263 -> pedido 009525 -> NF 25265).
+remessas AS (
+  SELECT TRIM(pedido) AS pedido, STRING_AGG(DISTINCT nf, ', ' ORDER BY nf) AS nfs_remessa,
+         ANY_VALUE(cliente) AS cliente_remessa
+  FROM `{PROJECT_ID}.bronze.cigam__notas_fiscais`
+  WHERE dataEmissao >= @piso AND especieNota = 'S' AND CFOP IN ('5923', '6923')
+  GROUP BY 1
 ),
 -- NF de entrada (D = devolução, C = complementar) que a Vibra emite
 -- referenciando a nossa NF: é assim que um "cancelamento" depois de 24 h
@@ -251,9 +266,13 @@ SELECT n.nf, n.serie, n.cliente, v.cnpj, n.dataEmissao AS emissao, n.status,
        n.dataCancelamento AS data_cancelamento, n.totalNF AS total_nf,
        t.vencimento, t.valor_titulo, t.pago, t.abatido, t.perda, t.data_baixa,
        d.nfs_devolucao, d.data_devolucao, n.localEntrega AS local_entrega,
-       i.material, i.tem_cta, i.tem_sonda, i.tem_licenciamento, i.textos
+       i.material, i.tem_cta, i.tem_sonda, i.tem_licenciamento, i.textos,
+       r.nfs_remessa AS nf_remessa, r.cliente_remessa, e.nomeCompleto AS nome_remessa,
+       e.municipio AS municipio_remessa, e.uf AS uf_remessa
 FROM notas n
 JOIN vibra v ON v.codigo = n.cliente
+LEFT JOIN remessas r ON r.pedido = n.pedidoRemessa
+LEFT JOIN `{PROJECT_ID}.bronze.cigam__empresas` e ON e.codigo = r.cliente_remessa
 LEFT JOIN titulos t ON t.nf = n.nf AND t.serie = n.serie AND t.codigoEmpresa = n.cliente
 LEFT JOIN devolucoes d ON d.nf = n.nf AND d.serie = n.serie AND d.cliente = n.cliente
 LEFT JOIN itens_nf i ON i.nf = n.nf AND i.serie = n.serie AND i.cliente = n.cliente
@@ -432,8 +451,23 @@ def montar_controle(df_dw: pd.DataFrame) -> pd.DataFrame:
             "Data pagamento / baixa": data_status,
             "NF de devolução": _str(linha.get("nfs_devolucao")),
             "Local de entrega (nº)": _inteiro(linha.get("local_entrega")),
+            "NF de remessa": _str(linha.get("nf_remessa")),
+            "_cliente_remessa": nome_cliente_remessa(linha.get("nome_remessa"), linha.get("municipio_remessa"),
+                                                     linha.get("uf_remessa")),
+            "_codigo_remessa": _str(linha.get("cliente_remessa")),
         })
-    return pd.DataFrame(linhas, columns=COLUNAS_DW)
+    return pd.DataFrame(linhas, columns=COLUNAS_DW + COLUNAS_INTERNAS)
+
+
+def nome_cliente_remessa(nome, municipio, uf) -> str:
+    """"CIA. DE FERRO LIGAS DA BAHIA - FERBASA (Pojuca/BA)": o cliente da NF
+    de remessa no formato da aba Locais de entrega."""
+    nome, municipio, uf = _str(nome), _str(municipio), _str(uf)
+    if not nome:
+        return ""
+    cidade = " ".join(p[:1].upper() + p[1:].lower() for p in municipio.split())
+    local = "/".join(x for x in (cidade, uf.upper()) if x)
+    return f"{nome} ({local})" if local else nome
 
 
 # ============================================================================
@@ -541,18 +575,33 @@ def ler_locais_entrega(valores_aba: list) -> dict:
 
 def locais_sem_cadastro(tabela: pd.DataFrame, locais: dict) -> list:
     """Linhas pra acrescentar na aba Locais de entrega: cada (filial, nº)
-    que aparece nas NFs e ainda não está lá, com as NFs onde apareceu."""
+    que aparece nas NFs e ainda não está lá. O cliente final vem do cliente
+    da NF de remessa (venda triangular); sem remessa, fica em branco pra
+    alguém preencher, com as NFs onde o local apareceu."""
     vistos = {}
     for _, linha in tabela.iterrows():
         chave = chave_local(linha["Filial Vibra (CNPJ)"], linha["Local de entrega (nº)"])
-        if chave is not None and chave not in locais:
-            vistos.setdefault(chave, (linha["Filial Vibra (CNPJ)"], []))[1].append(str(linha["NF"]))
+        if chave is None or chave in locais:
+            continue
+        visto = vistos.setdefault(chave, {"cnpj": linha["Filial Vibra (CNPJ)"], "nfs": [], "remessas": [],
+                                          "cliente": "", "codigo": ""})
+        visto["nfs"].append(str(linha["NF"]))
+        cliente = _str(linha.get("_cliente_remessa"))
+        if cliente and not visto["cliente"]:
+            visto["cliente"], visto["codigo"] = cliente, _str(linha.get("_codigo_remessa"))
+        if _str(linha.get("NF de remessa")):
+            visto["remessas"].append(_str(linha.get("NF de remessa")))
+    ordem = lambda nf: int(nf) if nf.isdigit() else 0
     linhas = []
     for chave in sorted(vistos):
-        cnpj, nfs = vistos[chave]
-        nfs = ", ".join(sorted(nfs, key=lambda nf: int(nf) if nf.isdigit() else 0))
-        origem = f"Preencher: visto na NF {nfs}" if "," not in nfs else f"Preencher: visto nas NFs {nfs}"
-        linhas.append([_texto(cnpj), chave[1], "", "", origem])
+        v = vistos[chave]
+        nfs = ", ".join(sorted(v["nfs"], key=ordem))
+        if v["cliente"]:
+            remessas = ", ".join(sorted(v["remessas"], key=ordem))
+            origem = f"Cliente da NF de remessa {remessas} (preenchido pelo extrator)"
+        else:
+            origem = f"Preencher: visto na NF {nfs}" if "," not in nfs else f"Preencher: visto nas NFs {nfs}"
+        linhas.append([_texto(v["cnpj"]), chave[1], v["cliente"], _texto(v["codigo"]), origem])
     return linhas
 
 
@@ -673,6 +722,7 @@ def valores_aba_controle(df: pd.DataFrame, atualizado_em: datetime) -> list:
             _texto(linha["NF de devolução"]),
             "" if linha["Local de entrega (nº)"] is None or pd.isna(linha["Local de entrega (nº)"])
             else int(linha["Local de entrega (nº)"]),
+            _texto(linha["NF de remessa"]),
             "",
             *[linha[nome] for nome in COLUNAS_MANUAIS],
             "", "",
@@ -828,6 +878,7 @@ LARGURAS = {
     "NF": 70, "Série": 50, "Emissão": 90, "Vencimento": 90, "Valor (R$)": 110, "Saldo em aberto (R$)": 120,
     "Nº Pedido Vibra": 115, "Filial Vibra (CNPJ)": 150, "Tipo de NF": 140, "Material": 320,
     "Status financeiro": 120, "Data pagamento / baixa": 110, "NF de devolução": 95, "Local de entrega (nº)": 80,
+    "NF de remessa": 95,
     COLUNA_CLIENTE_FINAL: 250, "Status entrega": 170, "Data entrega / NF assinada": 120,
     "Obs. Emissão": 220, "Obs. financeiro": 300, "Dias em atraso": 80, "Próxima ação": 210,
 }

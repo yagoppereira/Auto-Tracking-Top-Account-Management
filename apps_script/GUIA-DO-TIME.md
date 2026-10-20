@@ -20,13 +20,13 @@ A linha 1 mostra, em cada bloco de colunas, quem cuida dele.
 
 | Colunas | Bloco | Quem preenche |
 |---|---|---|
-| A a N | **Do CIGAM**: NF, série, emissão, vencimento, valor, saldo, nº do pedido, filial Vibra, tipo, material, status financeiro, data de pagamento, NF de devolução, nº do local de entrega | O script. **Não edite**: tudo é reescrito na próxima atualização. Exceção: o **nº do pedido (G)** pode ser digitado quando está em branco (ver abaixo). |
-| O | **Cliente final** | Fórmula. Vem da aba **Locais de entrega** (ver abaixo). |
-| P a R | **Emissão preenche**: status entrega, data da entrega / NF assinada, obs. Emissão | Emissão |
-| S | **Financeiro preenche**: obs. financeiro | Financeiro |
-| T e U | **Automático**: dias em atraso, próxima ação | Fórmulas |
+| A a O | **Do CIGAM**: NF, série, emissão, vencimento, valor, saldo, nº do pedido, filial Vibra, tipo, material, status financeiro, data de pagamento, NF de devolução, nº do local de entrega, **NF de remessa** | O script. **Não edite**: tudo é reescrito na próxima atualização. Exceção: o **nº do pedido (G)** pode ser digitado quando está em branco (ver abaixo). |
+| P | **Cliente final** | Fórmula. Vem da aba **Locais de entrega** (ver abaixo). |
+| Q a S | **Emissão preenche**: status entrega, data da entrega / NF assinada, obs. Emissão | Emissão |
+| T | **Financeiro preenche**: obs. financeiro | Financeiro |
+| U e V | **Automático**: dias em atraso, próxima ação | Fórmulas |
 
-O que o time escreve em P a S fica preso à NF (número + série): pode reordenar
+O que o time escreve em Q a T fica preso à NF (número + série): pode reordenar
 ou filtrar à vontade que, na atualização, cada informação volta pra linha
 certa.
 
@@ -62,8 +62,8 @@ Calculado pelo script a partir do título no CIGAM:
 
 ## Status de entrega e próxima ação
 
-A Emissão escolhe o **Status entrega** (coluna P) na lista suspensa. A
-**Próxima ação** (coluna U) se ajusta sozinha:
+A Emissão escolhe o **Status entrega** (coluna Q) na lista suspensa. A
+**Próxima ação** (coluna V) se ajusta sozinha:
 
 | Status entrega | Próxima ação (se a NF está em aberto) |
 |---|---|
@@ -82,6 +82,16 @@ A Emissão escolhe o **Status entrega** (coluna P) na lista suspensa. A
 - As opções da lista ficam na aba **Listas**. Para criar uma nova, acrescente
   lá com a próxima ação correspondente.
 
+## NF de remessa (a que o cliente final assina)
+
+Nas vendas triangulares saem duas NFs no mesmo dia: a **NF da Vibra** (venda à
+ordem, CFOP 6119/6118), que só fatura, e a **NF de remessa** (remessa por conta
+e ordem, CFOP 6923/5923), que vai com o material para o cliente final. É a NF
+de remessa que o cliente final recebe e assina: a coluna **O** mostra o número
+dela, vindo do CIGAM (ex.: NF Vibra 25263, remessa 25265 para a Ferbasa
+Pojuca). Mensalidade, serviço e venda direta não têm remessa: a coluna fica em
+branco.
+
 ## Cliente final e aba "Locais de entrega"
 
 Nas vendas triangulares, a NF sai para a Vibra mas o material vai para outro
@@ -95,7 +105,8 @@ A aba **Locais de entrega** traduz o número para o cliente, por filial: o local
 - Para corrigir ou cadastrar um cliente final, edite **só a aba Locais de
   entrega**. Todas as NFs daquele local mudam na hora.
 - Quando aparece um local novo numa NF, o script acrescenta uma linha no fim
-  da aba Locais com o cliente em branco. Enquanto ninguém preenche, a NF mostra
+  da aba Locais **já com o cliente da NF de remessa** (nome, cidade e código
+  do cadastro). Só fica em branco quando a NF não tem remessa; aí a NF mostra
   **"Cadastrar na aba Locais de entrega"**. Para descobrir o cliente, abra a NF
   no CIGAM, aba Transporte, campo Local de Entrega.
 - NF sem local de entrega (serviço, mensalidade, venda direta) fica com o
@@ -111,7 +122,7 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Opção | Mostra |
 |---|---|
 | Todas as NFs | Tira o filtro e mostra todas as colunas |
-| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) e entregues (NF assinada recebida ou "Não se aplica"), **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (cliente final), S (obs. financeiro) e T (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
+| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) e entregues (NF assinada recebida ou "Não se aplica"), **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (NF de remessa), P (cliente final), T (obs. financeiro) e U (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
 | Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
 | Pendentes entregues | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
 | Pendentes entregues em atraso | Os de cima com vencimento já passado |
@@ -144,17 +155,18 @@ Cuidados:
 ## Rotina sugerida
 
 - **Emissão**: filtro **Aguardando a Emissão**. Para cada NF, atualize o
-  status de entrega (P). Quando a NF assinada chegar, marque **NF assinada
-  recebida** e informe a data (Q). Detalhes vão em Obs. Emissão (R).
+  status de entrega (Q). Quando a NF de remessa (coluna O) assinada chegar,
+  marque **NF assinada recebida** e informe a data (R). Detalhes vão em
+  Obs. Emissão (S).
 - **Financeiro**: filtro **Pendentes entregues em atraso** para cobrar a
   Vibra, **Pendentes de pagamento** para a visão de tudo que está em aberto e
   **Pagos no período** para conferir os recebimentos. Anotações em
-  Obs. financeiro (S).
+  Obs. financeiro (T).
 
 ## Dúvidas comuns
 
-- **Escrevi em uma coluna de A a N e sumiu.** Essas colunas são reescritas a
-  cada atualização. Use as colunas de observação (R ou S). A exceção é o nº do
+- **Escrevi em uma coluna de A a O e sumiu.** Essas colunas são reescritas a
+  cada atualização. Use as colunas de observação (S ou T). A exceção é o nº do
   pedido (G): digitado numa NF em que ele está em branco, ele é mantido.
 - **O nº do pedido da Vibra está na NF, mas a coluna G está em branco.** O
   script só acha o pedido quando ele está escrito na descrição de algum item
