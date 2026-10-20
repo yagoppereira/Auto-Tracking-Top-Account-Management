@@ -322,6 +322,11 @@ function gravarControle_(aba, tabela, agora) {
   const nDw = COLUNAS_DW.length;
   const nColunas = nDw + 1 + COLUNAS_MANUAIS.length;
   const totaisAntigos = linhasDeTotal_(aba);
+  // grava sem filtro: linha oculta pelo filtro perde as datas no setValues
+  // (aconteceu com "Pagos no período" aplicado: as NFs em aberto ficaram sem
+  // emissão e vencimento, e os dias em atraso viraram 46 mil). ajustarFiltro_
+  // recria o filtro no fim e reaplica o filtro rápido de A1.
+  if (aba.getFilter()) aba.getFilter().remove();
   const necessarias = PRIMEIRA_LINHA_DADOS + tabela.length;  // NFs + linha de totais
   if (aba.getMaxRows() < necessarias) {
     aba.insertRowsAfter(aba.getMaxRows(), necessarias - aba.getMaxRows());
