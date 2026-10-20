@@ -126,7 +126,7 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
 | Pendentes entregues | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
 | Pendentes entregues em atraso | Os de cima com vencimento já passado |
-| Aguardando a Emissão | Em aberto com entrega ainda não confirmada (a validar, aguardando, problema ou em branco) |
+| Aguardando a Emissão | Em aberto com entrega ainda não confirmada (a validar, aguardando, problema ou em branco). Esconde as colunas B, C, D, E, H, K, L, M e N (série, emissão, vencimento, valor, filial, status financeiro, data de pagamento, NF de devolução e nº do local) até escolher outra opção |
 | Pagos | Todas as NFs com status Pago |
 | Pagos no período | Pagas entre as datas de **E1** ("de") e **F1** ("até"), pela data de pagamento (coluna L). Sem datas, usa o mês atual. Mudou a data, o filtro se refaz |
 | Canceladas / devolvidas | Canceladas, devolvidas, abatidas e baixas por perda |

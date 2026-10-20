@@ -263,3 +263,13 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
     assert aba["B2"].number_format == "dd/mm/yyyy"
     assert aba["H3"].number_format == '"Em atraso: R$ "#,##0.00'
     assert aba["A1"].font.b and aba.freeze_panes == "A2"
+
+
+def test_aguardando_a_emissao_esconde_b_c_d_e_h_k_l_m_n():
+    colunas = {nome: i for i, nome in enumerate(cv.COLUNAS)}
+    saida = _rodar_node({"filtros": {"colunas": colunas, "linhas": [], "de": "2026-09-01", "ate": "2026-09-30"}})
+    ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
+               for inicio, quantidade in saida["ocultas_emissao"] for i in range(quantidade)}
+    assert ocultas == set("BCDEHKLMN")
+    assert saida["ocultas_emissao"] == [[2, 4], [8, 1], [11, 4]]
+    assert saida["ocultas_pagos"] is None  # os outros filtros não escondem colunas

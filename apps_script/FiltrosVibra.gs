@@ -33,6 +33,13 @@ const COLUNAS_CONTROLE_VIBRA = [
   'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'Obs. financeiro', 'Dias em atraso',
 ];
 
+// visão da Emissão ("Aguardando a Emissão"): esconde o que não ajuda a
+// validar a entrega (B, C, D, E, H, K, L, M e N); o resto fica à vista
+const COLUNAS_OCULTAS_EMISSAO = [
+  'Série', 'Emissão', 'Vencimento', 'Valor (R$)', 'Filial Vibra (CNPJ)', 'Status financeiro',
+  'Data pagamento / baixa', 'NF de devolução', 'Local de entrega (nº)',
+];
+
 const FILTROS_VIBRA = {
   controle_vibra: {
     rotulo: 'Atualizar o controle da Vibra',
@@ -68,6 +75,7 @@ const FILTROS_VIBRA = {
   aguardando_emissao: {
     rotulo: 'Aguardando a Emissão',
     titulo: 'Em aberto aguardando a Emissão (entrega não confirmada)',
+    ocultas: COLUNAS_OCULTAS_EMISSAO,
     condicoes: () => [
       { coluna: 'Status financeiro', em: STATUS_ABERTOS },
       { coluna: 'Status entrega', foraDe: ENTREGA_CONCLUIDA },
@@ -239,7 +247,7 @@ function filtrar_(aba, opcao, de, ate) {
   const { colunas, linhas } = lerTabela_(aba, linhaCabecalho);
   limparCriterios_(filtroAba);
   const filtro = opcao ? FILTROS_VIBRA[opcao] : null;
-  mostrarColunas_(aba, colunas, filtro && filtro.colunas);
+  mostrarColunas_(aba, colunas, filtro && colunasVisiveis(filtro, colunas));
   if (!filtro) return Object.assign({ titulo: OPCAO_TODAS }, resumirFiltro([], colunas, linhas));
 
   const condicoes = filtro.condicoes(de, ate);
@@ -299,6 +307,14 @@ function lerTabela_(aba, linhaCabecalho) {
 // ============================================================================
 // Regras (sem serviços do Apps Script: testadas no Node)
 // ============================================================================
+/** Colunas que ficam à vista na opção: a lista `colunas` dela, ou todas as do
+ * cabeçalho menos as `ocultas`; null = todas (não oculta nada). */
+function colunasVisiveis(filtro, colunas) {
+  if (filtro.colunas) return filtro.colunas;
+  if (filtro.ocultas) return Object.keys(colunas).filter(nome => nome && filtro.ocultas.indexOf(nome) < 0);
+  return null;
+}
+
 /** Faixas [primeira coluna (a partir de 1), quantidade] a ocultar pra ficarem
  * só as colunas `visiveis` (nomes do cabeçalho). Coluna sem cabeçalho também
  * fica oculta. */
@@ -642,7 +658,8 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 
   <h3>Emissão</h3>
   <button class="filtro" onclick="aplicar('aguardando_emissao')">Aguardando a Emissão
-    <small>Em aberto e entrega ainda não confirmada (a validar, aguardando, problema ou em branco)</small></button>
+    <small>Em aberto e entrega ainda não confirmada (a validar, aguardando, problema ou em branco).
+    Esconde as colunas B, C, D, E, H, K, L, M e N</small></button>
 
   <h3>Outros</h3>
   <button class="filtro" onclick="aplicar('encerradas_sem_pagamento')">Canceladas, devolvidas e abatidas
