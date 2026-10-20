@@ -23,11 +23,12 @@
  */
 
 // visão "Atualizar o controle da Vibra": só as colunas que interessam pra
-// atualizar o controle (A, C, D, F, G, H, I, J, O, P, R, S, T, V e W). Achadas pelo
-// nome do cabeçalho; as outras ficam ocultas até escolher outro filtro.
+// atualizar o controle (A, C, D, F, G, H, I, J, O, P, R, T, V e W). Achadas pelo
+// nome do cabeçalho; as outras ficam ocultas até escolher outro filtro. A
+// data de instalação é só do operacional: a Vibra não precisa dela.
 const COLUNAS_CONTROLE_VIBRA = [
   'NF', 'Emissão', 'Vencimento', 'Saldo em aberto (R$)', 'Nº Pedido Vibra', 'Filial Vibra (CNPJ)',
-  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'NF comodato Vibra', 'Data instalação',
+  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'NF comodato Vibra',
   'Data entrega / NF assinada', 'Obs. financeiro', 'Dias em atraso',
 ];
 
@@ -74,11 +75,11 @@ const FILTROS_VIBRA = {
     rotulo: 'Aguardando a Emissão',
     titulo: 'Aguardando a Emissão (entrega, instalação ou comodato pendente)',
     ocultas: COLUNAS_OCULTAS_EMISSAO,
-    // como na planilha do operacional: segue até o comodato assinado mesmo
-    // depois de a Vibra pagar; só sai NF cancelada, devolvida ou baixada
+    // só o que ainda depende do operacional para a Vibra pagar: sai a NF já
+    // paga (ou encerrada) e a que já está ok para cobrança
     condicoes: () => [
       { coluna: 'Status entrega', em: STATUS_PENDENTES_OPERACIONAL },
-      { coluna: 'Status financeiro', foraDe: [STATUS_CANCELADA, STATUS_DEVOLVIDA, STATUS_ABATIDA, STATUS_PERDA] },
+      { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
     ],
   },
   pagos: {
@@ -658,7 +659,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 
   <h3>Emissão</h3>
   <button class="filtro" onclick="aplicar('aguardando_emissao')">Aguardando a Emissão
-    <small>Entrega, instalação ou comodato pendentes, mesmo de NF já paga (como na planilha do operacional).
+    <small>Entrega, instalação ou comodato pendentes, só de NF em aberto e ainda não ok para cobrança.
     Esconde as colunas B, C, D, E, H, K, L, M e N</small></button>
 
   <h3>Outros</h3>

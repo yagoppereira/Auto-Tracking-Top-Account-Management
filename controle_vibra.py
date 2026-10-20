@@ -108,9 +108,9 @@ STATUS_ENTREGA_ACAO = [
 # material já entregue (base dos filtros "entregues" e da visão da Vibra)
 STATUS_ENTREGUES = ["Não instalado", "Não instalado, comodato assinado", "Aguardando comodato da Vibra",
                     "Aguardando cliente assinar comodato", "Comodato assinado", "Não se aplica"]
-# ainda tem etapa do operacional (filtro "Aguardando a Emissão")
-STATUS_PENDENTES_OPERACIONAL = ["A validar", "Não entregue", "Não instalado", "Não instalado, comodato assinado",
-                                "Aguardando comodato da Vibra", "Aguardando cliente assinar comodato",
+# ainda tem etapa do operacional (filtro "Aguardando a Emissão"); as que já
+# estão ok para cobrança ("Financeiro: cobrar Vibra") ficam de fora
+STATUS_PENDENTES_OPERACIONAL = ["A validar", "Não entregue", "Não instalado", "Aguardando comodato da Vibra", "Aguardando cliente assinar comodato",
                                 "Problema na entrega"]
 # status da lista anterior -> etapa equivalente da esteira
 MIGRACAO_STATUS_ENTREGA = {

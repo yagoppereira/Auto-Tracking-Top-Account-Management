@@ -146,11 +146,11 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Opção | Mostra |
 |---|---|
 | Todas as NFs | Tira o filtro e mostra todas as colunas |
-| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) com material entregue (qualquer etapa depois da entrega) ou "Não se aplica", **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (NF de remessa), P (cliente final), R (NF comodato Vibra), S (data instalação), T (data entrega / NF assinada), V (obs. financeiro) e W (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
+| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) com material entregue (qualquer etapa depois da entrega) ou "Não se aplica", **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (NF de remessa), P (cliente final), R (NF comodato Vibra), T (data entrega / NF assinada), V (obs. financeiro) e W (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
 | Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
 | Pendentes entregues | Em aberto ou pago parcial, com material entregue (qualquer etapa depois da entrega) ou "Não se aplica". Cobrar só os que estão com a próxima ação "Financeiro: cobrar Vibra" (comodato assinado) |
 | Pendentes entregues em atraso | Os de cima com vencimento já passado |
-| Aguardando a Emissão | Entrega, instalação ou comodato ainda pendentes, inclusive de NF já paga (como na planilha do operacional); só sai NF cancelada, devolvida ou baixada. Esconde as colunas B, C, D, E, H, K, L, M e N (série, emissão, vencimento, valor, filial, status financeiro, data de pagamento, NF de devolução e nº do local) até escolher outra opção |
+| Aguardando a Emissão | Em aberto (ou pago parcial) com entrega, instalação ou comodato ainda pendentes. Não mostra NF já paga nem as que já estão ok para cobrança (próxima ação "Financeiro: cobrar Vibra"). Esconde as colunas B, C, D, E, H, K, L, M e N (série, emissão, vencimento, valor, filial, status financeiro, data de pagamento, NF de devolução e nº do local) até escolher outra opção |
 | Pagos | Todas as NFs com status Pago |
 | Pagos no período | Pagas entre as datas de **E1** ("de") e **F1** ("até"), pela data de pagamento (coluna L). Sem datas, usa o mês atual. Mudou a data, o filtro se refaz |
 | Canceladas / devolvidas | Canceladas, devolvidas, abatidas e baixas por perda |

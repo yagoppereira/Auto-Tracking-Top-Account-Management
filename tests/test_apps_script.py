@@ -168,11 +168,17 @@ def test_filtros_contam_as_nfs_de_cada_condicao():
         "pendentes_pagamento": 4,       # 1, 2, 3 e 10: todo título em aberto ou pago em parte
         "pendentes_entregues": 3,       # 1, 2 e 10: com entrega concluída ou não se aplica
         "pendentes_entregues_atraso": 1,  # só a 1 tem dias em atraso
-        "aguardando_emissao": 2,        # 3 (a validar) e 6 (paga, não instalada); a 8 é devolvida
+        "aguardando_emissao": 1,        # só a 3 (a validar); a 6 já foi paga, a 8 é devolvida e a 1 está ok para cobrança
         "pagos": 3,
         "pagos_periodo": 2,             # 08/09 e 30/09 (o fim do período entra); 01/10 fica fora
         "encerradas_sem_pagamento": 2,  # devolvida e cancelada
     }
+    k, p = cv._letra("Status financeiro"), cv._letra("Status entrega")
+    # sai a NF já paga e a que está ok para cobrança ("Não instalado, comodato assinado")
+    assert saida["aguardando_emissao"]["formula"] == (
+        f'=(((${p}3="A validar")+(${p}3="Não entregue")+(${p}3="Não instalado")'
+        f'+(${p}3="Aguardando comodato da Vibra")+(${p}3="Aguardando cliente assinar comodato")'
+        f'+(${p}3="Problema na entrega")+0>0)*((${k}3="Em aberto")+(${k}3="Pago parcial")+0>0)*1)>0')
     assert saida["pendentes_pagamento"]["resumo"] == {"nfs": 4, "valor": 500, "saldo": 450}
     assert saida["pendentes_entregues"]["resumo"] == {"nfs": 3, "valor": 400, "saldo": 350}
 
@@ -214,9 +220,9 @@ def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
     ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
                for inicio, quantidade in saida["ocultas_controle_vibra"] for i in range(quantidade)}
     visiveis = {cv._letra(nome) for nome in cv.COLUNAS} - ocultas
-    assert visiveis == set("ACDFGHIJOPRSTVW")  # O remessa, R comodato, S instalação, T NF assinada
+    assert visiveis == set("ACDFGHIJOPRTVW")  # O remessa, R comodato, T NF assinada; S (instalação) não
     # faixas contíguas: uma chamada de ocultar por faixa
-    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 1], [21, 1], [24, 1]]
+    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 1], [19, 1], [21, 1], [24, 1]]
 
 
 

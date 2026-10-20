@@ -75,9 +75,9 @@ const STATUS_ENTREGA_ACAO = [
 // material já entregue (base dos filtros "entregues" e da visão da Vibra)
 const STATUS_ENTREGUES = ['Não instalado', 'Não instalado, comodato assinado', 'Aguardando comodato da Vibra',
   'Aguardando cliente assinar comodato', 'Comodato assinado', 'Não se aplica'];
-// ainda tem etapa do operacional (filtro "Aguardando a Emissão")
-const STATUS_PENDENTES_OPERACIONAL = ['A validar', 'Não entregue', 'Não instalado', 'Não instalado, comodato assinado',
-  'Aguardando comodato da Vibra', 'Aguardando cliente assinar comodato', 'Problema na entrega'];
+// ainda tem etapa do operacional (filtro "Aguardando a Emissão"); as que já
+// estão ok para cobrança ("Financeiro: cobrar Vibra") ficam de fora
+const STATUS_PENDENTES_OPERACIONAL = ['A validar', 'Não entregue', 'Não instalado', 'Aguardando comodato da Vibra', 'Aguardando cliente assinar comodato', 'Problema na entrega'];
 // status da lista anterior -> etapa equivalente da esteira
 const MIGRACAO_STATUS_ENTREGA = {
   'Aguardando entrega': 'Não entregue',
