@@ -136,7 +136,7 @@ COLUNAS_INTERNAS = ["_cliente_remessa", "_codigo_remessa"]
 # Locais de entrega), pra que um local cadastrado lá apareça na hora em
 # todas as NFs, sem depender de rodar o extrator nem de alguém digitar
 COLUNA_CLIENTE_FINAL = "Cliente final"
-COLUNAS_EMISSAO = ["Status entrega", "NF comodato Vibra", "Situação NF assinada", "Data entrega / NF assinada",
+COLUNAS_EMISSAO = ["Status entrega", "NF comodato Vibra", "Data instalação", "Data entrega / NF assinada",
                    "Obs. Emissão"]
 COLUNAS_FINANCEIRO = ["Obs. financeiro"]
 COLUNAS_MANUAIS = COLUNAS_EMISSAO + COLUNAS_FINANCEIRO
@@ -936,7 +936,7 @@ LARGURAS = {
     "NF": 70, "Série": 50, "Emissão": 90, "Vencimento": 90, "Valor (R$)": 110, "Saldo em aberto (R$)": 120,
     "Nº Pedido Vibra": 115, "Filial Vibra (CNPJ)": 150, "Tipo de NF": 140, "Material": 320,
     "Status financeiro": 120, "Data pagamento / baixa": 110, "NF de devolução": 95, "Local de entrega (nº)": 80,
-    "NF de remessa": 95, "NF comodato Vibra": 120, "Situação NF assinada": 200,
+    "NF de remessa": 95, "NF comodato Vibra": 120, "Data instalação": 110,
     COLUNA_CLIENTE_FINAL: 250, "Status entrega": 170, "Data entrega / NF assinada": 120,
     "Obs. Emissão": 220, "Obs. financeiro": 300, "Dias em atraso": 80, "Próxima ação": 210,
 }
@@ -1032,7 +1032,7 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
     centro = {"horizontalAlignment": "CENTER", "numberFormat": {"type": "NUMBER", "pattern": "0"}}
     for nome in ("Valor (R$)", "Saldo em aberto (R$)"):
         req.append(_formato(dados(idx[nome], idx[nome] + 1), moeda, "userEnteredFormat.numberFormat"))
-    for nome in ("Emissão", "Vencimento", "Data pagamento / baixa", "Data entrega / NF assinada"):
+    for nome in ("Emissão", "Vencimento", "Data pagamento / baixa", "Data instalação", "Data entrega / NF assinada"):
         req.append(_formato(dados(idx[nome], idx[nome] + 1), data,
                             "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"))
     for nome in ("NF", "Dias em atraso"):
@@ -1040,7 +1040,7 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
                             "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"))
     req.append(_formato(dados(idx["Série"], idx["Série"] + 1), {"horizontalAlignment": "CENTER"},
                         "userEnteredFormat.horizontalAlignment"))
-    for nome in ("Material", COLUNA_CLIENTE_FINAL, "Situação NF assinada", "Obs. Emissão", "Obs. financeiro"):
+    for nome in ("Material", COLUNA_CLIENTE_FINAL, "Obs. Emissão", "Obs. financeiro"):
         req.append(_formato(dados(idx[nome], idx[nome] + 1), {"wrapStrategy": "WRAP"},
                             "userEnteredFormat.wrapStrategy"))
 
@@ -1061,10 +1061,11 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
         "range": dados(idx["Status entrega"], idx["Status entrega"] + 1),
         "rule": {"condition": {"type": "ONE_OF_RANGE", "values": [{"userEnteredValue": f"={ABA_LISTAS}!$A$2:$A$20"}]},
                  "strict": True, "showCustomUi": True}}})
-    req.append({"setDataValidation": {
-        "range": dados(idx["Data entrega / NF assinada"], idx["Data entrega / NF assinada"] + 1),
-        "rule": {"condition": {"type": "DATE_IS_VALID"}, "strict": True,
-                 "inputMessage": "Informe uma data (dd/mm/aaaa)"}}})
+    for nome in ("Data instalação", "Data entrega / NF assinada"):
+        req.append({"setDataValidation": {
+            "range": dados(idx[nome], idx[nome] + 1),
+            "rule": {"condition": {"type": "DATE_IS_VALID"}, "strict": True,
+                     "inputMessage": "Informe uma data (dd/mm/aaaa)"}}})
 
     # NF encerrada fica em cinza. A regra olha a "Próxima ação" (fórmula da
     # coluna T) em vez de combinar os status com AND(...;...): o separador

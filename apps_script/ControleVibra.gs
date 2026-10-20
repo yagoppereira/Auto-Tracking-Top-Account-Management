@@ -96,7 +96,7 @@ const CABECALHO_LOCAIS = [
 ];
 // O é fórmula (cliente final pela aba Locais de entrega); P a S são do time
 const COLUNA_CLIENTE_FINAL = 'Cliente final';
-const COLUNAS_MANUAIS = ['Status entrega', 'NF comodato Vibra', 'Situação NF assinada', 'Data entrega / NF assinada',
+const COLUNAS_MANUAIS = ['Status entrega', 'NF comodato Vibra', 'Data instalação', 'Data entrega / NF assinada',
   'Obs. Emissão', 'Obs. financeiro'];
 // coluna que a Emissão preenchia à mão antes de virar fórmula: o que foi
 // digitado e não bate com a aba Locais de entrega vai pra Obs. Emissão
@@ -504,19 +504,28 @@ function ajustarFiltro_(aba, ultimaLinhaNf) {
 function migrarLayout_(aba) {
   const linhaCabecalho = PRIMEIRA_LINHA_DADOS - 1;
   const cabecalho = () => aba.getRange(linhaCabecalho, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
-  // coluna nova logo depois de `depoisDe`, se ainda não existe
-  const garantir = (nome, depoisDe, largura) => {
+  // coluna nova logo depois de `depoisDe`, se ainda não existe. A coluna
+  // inserida herda o formato e a lista suspensa da vizinha da esquerda: os
+  // dados ficam sem validação e, se `data`, com formato e validação de data.
+  const garantir = (nome, depoisDe, largura, data) => {
     const atual = cabecalho();
     const posicao = atual.indexOf(depoisDe);
     if (atual.indexOf(nome) >= 0 || posicao < 0) return;
     aba.insertColumnAfter(posicao + 1);
-    aba.getRange(linhaCabecalho, posicao + 2).setValue(nome);
-    aba.setColumnWidth(posicao + 2, largura);
+    const coluna = posicao + 2;
+    aba.getRange(linhaCabecalho, coluna).setValue(nome);
+    aba.setColumnWidth(coluna, largura);
+    const dados = aba.getRange(PRIMEIRA_LINHA_DADOS, coluna, aba.getMaxRows() - PRIMEIRA_LINHA_DADOS + 1, 1);
+    dados.clearDataValidations().setNumberFormat(data ? 'dd/mm/yyyy' : '@').setHorizontalAlignment('center');
+    if (data) {
+      dados.setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false)
+        .setHelpText('Informe uma data (dd/mm/aaaa)').build());
+    }
   };
-  garantir('NF de remessa', 'Local de entrega (nº)', 95);
+  garantir('NF de remessa', 'Local de entrega (nº)', 95, false);
   // colunas da planilha do operacional, no bloco da Emissão
-  garantir('NF comodato Vibra', 'Status entrega', 120);
-  garantir('Situação NF assinada', 'NF comodato Vibra', 200);
+  garantir('NF comodato Vibra', 'Status entrega', 120, false);
+  garantir('Data instalação', 'NF comodato Vibra', 110, true);
 }
 
 /** Aba Listas: status de entrega com a próxima ação (lista suspensa e

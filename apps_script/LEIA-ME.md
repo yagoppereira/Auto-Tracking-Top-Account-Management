@@ -33,8 +33,8 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   CIGAM (O = NF de remessa da venda triangular) e preserva as colunas Q a V
   preenchidas pelo time. Numa planilha anterior à coluna "NF de remessa", a
   primeira atualização insere a coluna depois do local de entrega; numa
-  anterior às colunas do operacional, insere "NF comodato Vibra" e "Situação
-  NF assinada" depois do Status entrega. A aba **Listas** é regravada a cada
+  anterior às colunas do operacional, insere "NF comodato Vibra" e "Data
+  instalação" depois do Status entrega. A aba **Listas** é regravada a cada
   atualização com as etapas do script, e a aba **Importar operacional**, se
   tiver dados, completa o que está em branco e é limpa.
 - A coluna P (**Cliente final**) é fórmula: procura a filial Vibra + o nº do

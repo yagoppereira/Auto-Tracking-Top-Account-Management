@@ -214,9 +214,9 @@ def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
     ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
                for inicio, quantidade in saida["ocultas_controle_vibra"] for i in range(quantidade)}
     visiveis = {cv._letra(nome) for nome in cv.COLUNAS} - ocultas
-    assert visiveis == set("ACDFGHIJOPRSVW")  # O = remessa, R/S = comodato e NF assinada
+    assert visiveis == set("ACDFGHIJOPRSTVW")  # O remessa, R comodato, S instalação, T NF assinada
     # faixas contíguas: uma chamada de ocultar por faixa
-    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 1], [20, 2], [24, 1]]
+    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 1], [21, 1], [24, 1]]
 
 
 
@@ -240,7 +240,7 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
     total[cv.COLUNAS.index("Saldo em aberto (R$)")] = 4561.68
     total[cv.COLUNAS.index("Material")] = 4561.68
     # colunas da visão "Atualizar o controle da Vibra": A C D F G H I J O S T
-    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOPRSVW"]
+    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOPRSTVW"]
     partes = _rodar_node({"xlsx": {"cabecalho": cabecalho, "linhas": [linha], "total": total,
                                    "colunas": colunas, "larguras": [70] * len(colunas)}})
 
@@ -254,7 +254,8 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
 
     assert linhas[0] == ["NF", "Emissão", "Vencimento", "Saldo em aberto (R$)", "Nº Pedido Vibra",
                          "Filial Vibra (CNPJ)", "Tipo de NF", "Material", "NF de remessa", "Cliente final",
-                         "NF comodato Vibra", "Situação NF assinada", "Obs. financeiro", "Dias em atraso"]
+                         "NF comodato Vibra", "Data instalação", "Data entrega / NF assinada", "Obs. financeiro",
+                         "Dias em atraso"]
     nf = dict(zip(linhas[0], linhas[1]))
     assert nf["NF"] == 21903 and nf["Saldo em aberto (R$)"] == 4561.68 and nf["Dias em atraso"] == 116
     assert nf["Emissão"] == datetime(2026, 5, 26)
@@ -282,7 +283,7 @@ def test_aguardando_a_emissao_esconde_b_c_d_e_h_k_l_m_n():
 
 def test_listas_e_importacao_do_operacional_iguais_nas_duas_versoes():
     importacao = [
-        ["NF", "Série", "NF comodato Vibra", "Situação NF assinada", "Status entrega"],
+        ["NF", "Série", "NF comodato Vibra", "Obs. Emissão", "Status entrega"],
         ["25263", "2", "2951430", "Enviadas 19/10", "Não instalado"],
         ["21897", "2", "4503751", "Enviadas 19/10", ""],
     ]
@@ -301,7 +302,7 @@ def test_listas_e_importacao_do_operacional_iguais_nas_duas_versoes():
     por_nf = {str(l[0]): l for l in esperado}
     col = cv.COLUNAS.index
     assert por_nf["25263"][col("NF comodato Vibra")] == "2951430"
-    assert por_nf["25263"][col("Situação NF assinada")] == "Enviadas 19/10"
+    assert por_nf["25263"][col("Obs. Emissão")] == "Enviadas 19/10"
     # a importação só preenche o que está em branco: a 25263 é nova e já entrou como "A validar"
     assert por_nf["25263"][col("Status entrega")] == "A validar"
     # 21897 já estava na planilha com "Aguardando NF assinada": migra pra etapa nova

@@ -23,12 +23,12 @@
  */
 
 // visão "Atualizar o controle da Vibra": só as colunas que interessam pra
-// atualizar o controle (A, C, D, F, G, H, I, J, O, P, R, S, V e W). Achadas pelo
+// atualizar o controle (A, C, D, F, G, H, I, J, O, P, R, S, T, V e W). Achadas pelo
 // nome do cabeçalho; as outras ficam ocultas até escolher outro filtro.
 const COLUNAS_CONTROLE_VIBRA = [
   'NF', 'Emissão', 'Vencimento', 'Saldo em aberto (R$)', 'Nº Pedido Vibra', 'Filial Vibra (CNPJ)',
-  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'NF comodato Vibra', 'Situação NF assinada',
-  'Obs. financeiro', 'Dias em atraso',
+  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'NF comodato Vibra', 'Data instalação',
+  'Data entrega / NF assinada', 'Obs. financeiro', 'Dias em atraso',
 ];
 
 // visão da Emissão ("Aguardando a Emissão"): esconde o que não ajuda a
@@ -632,7 +632,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 <body>
   <button class="excel" onclick="baixarExcel()">⬇ Baixar em Excel o que está na tela</button>
   <button class="filtro especial" onclick="aplicar('controle_vibra')">Atualizar o controle da Vibra
-    <small>Em aberto com material entregue (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, P, R, S, V e W.
+    <small>Em aberto com material entregue (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, P, R, S, T, V e W.
     Escolha outro filtro ou "Mostrar todas" para voltar as colunas</small></button>
 
   <h3>Financeiro</h3>
