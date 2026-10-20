@@ -138,7 +138,7 @@ def test_le_preenchimento_do_layout_antigo_pelo_nome_da_coluna():
     assert set(manuais) == {("21897", "2"), ("21903", "S1")}
     linha = manuais[("21897", "2")]
     assert linha["Cliente final / local de entrega"] == "Gerdau Aços Longos Lassance/MG"
-    assert linha["Status entrega"] == "Aguardando NF assinada"
+    assert linha["Status entrega"] == "Aguardando NF assinada"  # lido como está; a mescla migra
     assert linha["Data entrega / NF assinada"] == "10/10/2026"
     assert linha["Obs. Emissão"] == "canhoto pedido"
     assert linha["Obs. financeiro"] == "AGUARDANDO ATUALIZAÇÕES DE PAGAMENTO VIBRA"
@@ -189,7 +189,8 @@ def test_mescla_devolve_preenchimento_e_inicia_status_entrega():
     manuais = cv.ler_preenchimento_manual(planilha_layout_antigo())
     selecionado = cv.selecionar_linhas(controle_exemplo(), manuais, date(2026, 1, 1))
     final = cv.mesclar_manuais(selecionado, manuais).set_index("NF")
-    assert final.loc["21897", "Status entrega"] == "Aguardando NF assinada"
+    # status da lista anterior vira a etapa equivalente da esteira do operacional
+    assert final.loc["21897", "Status entrega"] == "Aguardando cliente assinar comodato"
     # cliente final digitado no layout antigo, sem a aba Locais: vai pra obs
     assert final.loc["21897", "Cliente final"] == ""
     assert final.loc["21897", "Obs. Emissão"] == "Cliente final: Gerdau Aços Longos Lassance/MG | canhoto pedido"
@@ -229,7 +230,7 @@ def test_valores_da_aba_tem_texto_protegido_e_formulas_no_cabecalho():
 def test_formulas_apontam_pras_colunas_certas():
     assert cv._letra("Status financeiro") == "K"
     assert cv._letra("Status entrega") == "Q"
-    assert cv._letra("Próxima ação") == "V"
+    assert cv._letra("Próxima ação") == "X"
     assert "K3:K" in cv.formula_dias_em_atraso() and "D3:D" in cv.formula_dias_em_atraso()
     assert "VLOOKUP(Q3:Q;Listas!$A$2:$B$20" in cv.formula_proxima_acao()
 
@@ -375,7 +376,7 @@ def test_sincronizar_planilha_preserva_o_time_e_reformata(monkeypatch):
     assert faixa == "A1" and len(valores) == 5  # grupos, cabeçalho, 2 NFs e a linha de totais
     assert valores[-1] == cv.linha_total(2)
     linha_21897 = next(l for l in valores[2:] if l[0] == 21897)
-    assert linha_21897[cv.COLUNAS.index("Status entrega")] == "Aguardando NF assinada"
+    assert linha_21897[cv.COLUNAS.index("Status entrega")] == "Aguardando cliente assinar comodato"
     # o cliente final digitado no layout antigo não se perde: vai pra obs, e
     # a coluna vira fórmula (cabeçalho com ARRAYFORMULA, células vazias)
     assert linha_21897[cv.COLUNAS.index("Obs. Emissão")] == (
@@ -470,7 +471,7 @@ def test_cliente_final_e_formula_pela_aba_de_locais():
     assert "HSTACK(REGEXREPLACE('Locais de entrega'!$A:$A" in formula
     assert "MATCH(" not in formula  # não roda linha a linha no ARRAYFORMULA
     assert cv._letra("NF de remessa") == "O" and cv._letra("Cliente final") == "P"
-    assert cv._letra("Status entrega") == "Q" and cv._letra("Próxima ação") == "V"
+    assert cv._letra("Status entrega") == "Q" and cv._letra("Próxima ação") == "X"
 
 
 def test_locais_sem_cadastro_listam_as_nfs():
@@ -503,7 +504,7 @@ def test_linha_de_totais_soma_so_as_linhas_visiveis_e_fica_fora_do_filtro():
     assert linha[cv.COLUNAS.index("Emissão")] == "=SUBTOTAL(103;A3:A41)"
     assert linha[cv.COLUNAS.index("Saldo em aberto (R$)")] == "=SUBTOTAL(109;F3:F41)"
     assert linha[cv.COLUNAS.index("Material")] == (
-        "=SUM(MAP(F3:F41;U3:U41;LAMBDA(v;d;IF(d>0;SUBTOTAL(109;v);0))))")
+        "=SUM(MAP(F3:F41;W3:W41;LAMBDA(v;d;IF(d>0;SUBTOTAL(109;v);0))))")
     # nada nas colunas de fórmula da linha 2 (O, T, U), que quebraria o ARRAYFORMULA
     for nome in [cv.COLUNA_CLIENTE_FINAL] + cv.COLUNAS_FORMULA:
         assert linha[cv.COLUNAS.index(nome)] == ""

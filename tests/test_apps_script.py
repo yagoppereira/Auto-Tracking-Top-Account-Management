@@ -2,6 +2,7 @@
 controle_vibra.py. Estes testes rodam as regras do .gs no Node e exigem o
 mesmo SQL e as mesmas células gravadas que a versão Python."""
 import json
+import re
 import shutil
 import subprocess
 from datetime import date, datetime
@@ -143,12 +144,12 @@ def _linha_planilha(nf, status, entrega="", pagamento=None, atraso="", valor=100
 
 def _filtros():
     linhas = [
-        _linha_planilha(1, "Em aberto", "NF assinada recebida", atraso=12, saldo=100.0),
+        _linha_planilha(1, "Em aberto", "Comodato assinado", atraso=12, saldo=100.0),
         _linha_planilha(2, "Pago parcial", "Não se aplica", valor=200.0, saldo=150.0),
         _linha_planilha(3, "Em aberto", "A validar", atraso=40, saldo=100.0),
         _linha_planilha(4, "Sem título", ""),
-        _linha_planilha(5, "Pago", "NF assinada recebida", pagamento="2026-09-08"),
-        _linha_planilha(6, "Pago", "", pagamento="2026-09-30"),
+        _linha_planilha(5, "Pago", "Comodato assinado", pagamento="2026-09-08"),
+        _linha_planilha(6, "Pago", "Não instalado", pagamento="2026-09-30"),  # paga, falta instalar
         _linha_planilha(7, "Pago", "", pagamento="2026-10-01"),
         _linha_planilha(8, "Devolvida", "A validar", pagamento="2026-09-10"),
         _linha_planilha(9, "Cancelada", ""),
@@ -167,7 +168,7 @@ def test_filtros_contam_as_nfs_de_cada_condicao():
         "pendentes_pagamento": 4,       # 1, 2, 3 e 10: todo título em aberto ou pago em parte
         "pendentes_entregues": 3,       # 1, 2 e 10: com entrega concluída ou não se aplica
         "pendentes_entregues_atraso": 1,  # só a 1 tem dias em atraso
-        "aguardando_emissao": 2,        # 3 (a validar) e 4 (sem título, entrega em branco)
+        "aguardando_emissao": 2,        # 3 (a validar) e 6 (paga, não instalada); a 8 é devolvida
         "pagos": 3,
         "pagos_periodo": 2,             # 08/09 e 30/09 (o fim do período entra); 01/10 fica fora
         "encerradas_sem_pagamento": 2,  # devolvida e cancelada
@@ -187,11 +188,14 @@ def test_formula_do_filtro_usa_as_colunas_do_layout_e_nao_depende_da_localidade(
     assert saida["pagos"]["formula"] == f'=(((${k}3="Pago")+0>0)*1)>0'
     assert saida["pendentes_entregues"]["formula"] == (
         f'=(((${k}3="Em aberto")+(${k}3="Pago parcial")+0>0)'
-        f'*((${p}3="NF assinada recebida")+(${p}3="Não se aplica")+0>0)*1)>0')
+        f'*((${p}3="Não instalado")+(${p}3="Não instalado, comodato assinado")'
+        f'+(${p}3="Aguardando comodato da Vibra")+(${p}3="Aguardando cliente assinar comodato")'
+        f'+(${p}3="Comodato assinado")+(${p}3="Não se aplica")+0>0)*1)>0')
     for resultado in saida.values():
         assert resultado["formula"].endswith("*1)>0")
     for resultado in saida.values():  # sem função de vários argumentos: nada de ";" nem ","
-        assert ";" not in resultado["formula"] and "," not in resultado["formula"]
+        fora_de_texto = re.sub(r'"[^"]*"', '""', resultado["formula"])  # vírgula em status é texto
+        assert ";" not in fora_de_texto and "," not in fora_de_texto
 
 
 def test_filtro_rapido_da_linha_1_tem_as_mesmas_opcoes_nas_duas_versoes():
@@ -210,9 +214,9 @@ def test_atualizar_o_controle_da_vibra_mostra_so_as_colunas_pedidas():
     ocultas = {cv._letra(cv.COLUNAS[inicio - 1 + i])
                for inicio, quantidade in saida["ocultas_controle_vibra"] for i in range(quantidade)}
     visiveis = {cv._letra(nome) for nome in cv.COLUNAS} - ocultas
-    assert visiveis == set("ACDFGHIJOPTU")  # O = NF de remessa
+    assert visiveis == set("ACDFGHIJOPRSVW")  # O = remessa, R/S = comodato e NF assinada
     # faixas contíguas: uma chamada de ocultar por faixa
-    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 3], [22, 1]]
+    assert saida["ocultas_controle_vibra"] == [[2, 1], [5, 1], [11, 4], [17, 1], [20, 2], [24, 1]]
 
 
 
@@ -236,7 +240,7 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
     total[cv.COLUNAS.index("Saldo em aberto (R$)")] = 4561.68
     total[cv.COLUNAS.index("Material")] = 4561.68
     # colunas da visão "Atualizar o controle da Vibra": A C D F G H I J O S T
-    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOPTU"]
+    colunas = [cv.COLUNAS.index(cv.COLUNAS[ord(l) - 65]) for l in "ACDFGHIJOPRSVW"]
     partes = _rodar_node({"xlsx": {"cabecalho": cabecalho, "linhas": [linha], "total": total,
                                    "colunas": colunas, "larguras": [70] * len(colunas)}})
 
@@ -250,7 +254,7 @@ def test_excel_do_filtrado_tem_so_as_linhas_e_colunas_visiveis(tmp_path):
 
     assert linhas[0] == ["NF", "Emissão", "Vencimento", "Saldo em aberto (R$)", "Nº Pedido Vibra",
                          "Filial Vibra (CNPJ)", "Tipo de NF", "Material", "NF de remessa", "Cliente final",
-                         "Obs. financeiro", "Dias em atraso"]
+                         "NF comodato Vibra", "Situação NF assinada", "Obs. financeiro", "Dias em atraso"]
     nf = dict(zip(linhas[0], linhas[1]))
     assert nf["NF"] == 21903 and nf["Saldo em aberto (R$)"] == 4561.68 and nf["Dias em atraso"] == 116
     assert nf["Emissão"] == datetime(2026, 5, 26)
@@ -273,3 +277,33 @@ def test_aguardando_a_emissao_esconde_b_c_d_e_h_k_l_m_n():
     assert ocultas == set("BCDEHKLMN")
     assert saida["ocultas_emissao"] == [[2, 4], [8, 1], [11, 4]]
     assert saida["ocultas_pagos"] is None  # os outros filtros não escondem colunas
+
+
+
+def test_listas_e_importacao_do_operacional_iguais_nas_duas_versoes():
+    importacao = [
+        ["NF", "Série", "NF comodato Vibra", "Situação NF assinada", "Status entrega"],
+        ["25263", "2", "2951430", "Enviadas 19/10", "Não instalado"],
+        ["21897", "2", "4503751", "Enviadas 19/10", ""],
+    ]
+    aba = planilha_layout_antigo()
+    saida = _rodar_node({"linhas": [_como_bigquery(c) for c in CASOS], "aba": aba, "desde": "2026-01-01",
+                         "locais": [], "importacao": importacao})
+    assert saida["listas"] == cv.valores_aba_listas()
+
+    manuais = cv.ler_preenchimento_manual(aba)
+    tabela = cv.mesclar_manuais(cv.selecionar_linhas(cv.montar_controle(pd.DataFrame(CASOS)), manuais,
+                                                     date(2026, 1, 1)),
+                                manuais, {}, cv.ler_importacao(importacao))
+    largura = len(cv.COLUNAS_DW) + 1 + len(cv.COLUNAS_MANUAIS)
+    esperado = [l[:largura] for l in cv.valores_aba_controle(tabela, datetime(2026, 10, 20))[2:2 + len(tabela)]]
+    assert saida["linhas"] == esperado
+    por_nf = {str(l[0]): l for l in esperado}
+    col = cv.COLUNAS.index
+    assert por_nf["25263"][col("NF comodato Vibra")] == "2951430"
+    assert por_nf["25263"][col("Situação NF assinada")] == "Enviadas 19/10"
+    # a importação só preenche o que está em branco: a 25263 é nova e já entrou como "A validar"
+    assert por_nf["25263"][col("Status entrega")] == "A validar"
+    # 21897 já estava na planilha com "Aguardando NF assinada": migra pra etapa nova
+    assert por_nf["21897"][col("Status entrega")] == "Aguardando cliente assinar comodato"
+    assert por_nf["21897"][col("NF comodato Vibra")] == "4503751"

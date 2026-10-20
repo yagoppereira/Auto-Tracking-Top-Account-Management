@@ -29,6 +29,11 @@ const DESDE_PADRAO = '2026-01-01';
 const ABA_CONTROLE = 'Controle NFs Vibra';
 const ABA_FONTES = 'Fontes';
 const ABA_LOCAIS = 'Locais de entrega';
+const ABA_LISTAS = 'Listas';
+// aba opcional pra trazer pra dentro do controle o que o operacional anotou
+// fora dele (NF, Série + colunas com o nome das colunas manuais): preenche só
+// o que está em branco no controle e é limpa depois de usada
+const ABA_IMPORTACAO = 'Importar operacional';
 const HORA_AGENDAMENTO = 7;
 
 const STATUS_EM_ABERTO = 'Em aberto';
@@ -41,6 +46,45 @@ const STATUS_PERDA = 'Baixa por perda';
 const STATUS_SEM_TITULO = 'Sem título';
 const STATUS_ABERTOS = [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL, STATUS_SEM_TITULO];
 
+const SIGNIFICADO_STATUS = [
+  [STATUS_EM_ABERTO, 'Título sem nenhuma baixa no CIGAM.'],
+  [STATUS_PAGO_PARCIAL, 'Título com parte do valor recebida; o saldo segue em aberto.'],
+  [STATUS_PAGO, 'Título liquidado por recebimento.'],
+  [STATUS_DEVOLVIDA, 'Título baixado por abatimento (portador X30) e com NF de devolução da Vibra.'],
+  [STATUS_ABATIDA, 'Título baixado por abatimento (portador X30), sem NF de devolução.'],
+  [STATUS_CANCELADA, 'NF cancelada no CIGAM.'],
+  [STATUS_PERDA, 'Título baixado por perda (portadores X90 a X99).'],
+  [STATUS_SEM_TITULO, 'NF confirmada sem título a receber no DW (o DW atualiza com até 1 dia de atraso).'],
+];
+
+// status de entrega (Emissão/operacional): entrega -> instalação -> comodato
+// da Vibra assinado pelo cliente final. O Financeiro só cobra com o comodato
+// assinado. Mesma lista de controle_vibra.py; vai pra aba Listas a cada
+// atualização (lista suspensa e próxima ação).
+const STATUS_ENTREGA_ACAO = [
+  ['A validar', 'Emissão: confirmar entrega'],
+  ['Não entregue', 'Emissão: acompanhar entrega'],
+  ['Não instalado', 'Emissão: acompanhar instalação'],
+  ['Não instalado, comodato assinado', 'Financeiro: cobrar Vibra'],
+  ['Aguardando comodato da Vibra', 'Emissão: cobrar comodato da Vibra'],
+  ['Aguardando cliente assinar comodato', 'Emissão: obter assinatura do comodato'],
+  ['Comodato assinado', 'Financeiro: cobrar Vibra'],
+  ['Problema na entrega', 'Emissão: resolver entrega'],
+  ['Não se aplica', 'Financeiro: cobrar Vibra'],
+];
+// material já entregue (base dos filtros "entregues" e da visão da Vibra)
+const STATUS_ENTREGUES = ['Não instalado', 'Não instalado, comodato assinado', 'Aguardando comodato da Vibra',
+  'Aguardando cliente assinar comodato', 'Comodato assinado', 'Não se aplica'];
+// ainda tem etapa do operacional (filtro "Aguardando a Emissão")
+const STATUS_PENDENTES_OPERACIONAL = ['A validar', 'Não entregue', 'Não instalado', 'Não instalado, comodato assinado',
+  'Aguardando comodato da Vibra', 'Aguardando cliente assinar comodato', 'Problema na entrega'];
+// status da lista anterior -> etapa equivalente da esteira
+const MIGRACAO_STATUS_ENTREGA = {
+  'Aguardando entrega': 'Não entregue',
+  'Aguardando NF assinada': 'Aguardando cliente assinar comodato',
+  'NF assinada recebida': 'Comodato assinado',
+};
+
 const COLUNAS_DW = [
   'NF', 'Série', 'Emissão', 'Vencimento', 'Valor (R$)', 'Saldo em aberto (R$)',
   'Nº Pedido Vibra', 'Filial Vibra (CNPJ)', 'Tipo de NF', 'Material',
@@ -52,7 +96,8 @@ const CABECALHO_LOCAIS = [
 ];
 // O é fórmula (cliente final pela aba Locais de entrega); P a S são do time
 const COLUNA_CLIENTE_FINAL = 'Cliente final';
-const COLUNAS_MANUAIS = ['Status entrega', 'Data entrega / NF assinada', 'Obs. Emissão', 'Obs. financeiro'];
+const COLUNAS_MANUAIS = ['Status entrega', 'NF comodato Vibra', 'Situação NF assinada', 'Data entrega / NF assinada',
+  'Obs. Emissão', 'Obs. financeiro'];
 // coluna que a Emissão preenchia à mão antes de virar fórmula: o que foi
 // digitado e não bate com a aba Locais de entrega vai pra Obs. Emissão
 const COLUNA_CLIENTE_FINAL_DIGITADO = 'Cliente final / local de entrega';
@@ -268,8 +313,11 @@ function atualizarControleVibra() {
     const valoresLocais = abaLocais.getDataRange().getValues();
 
     migrarLayout_(aba);
+    escreverListas_(planilha);
+    const abaImportacao = planilha.getSheetByName(ABA_IMPORTACAO);
+    const valoresImportacao = abaImportacao ? abaImportacao.getDataRange().getValues() : [];
     const atual = aba.getDataRange().getValues();
-    const tabela = montarTabela(consultarNotasVibra_(), atual, DESDE_PADRAO, valoresLocais);
+    const tabela = montarTabela(consultarNotasVibra_(), atual, DESDE_PADRAO, valoresLocais, valoresImportacao);
     const agora = new Date();
     gravarControle_(aba, tabela, agora);
     atualizarFontes_(planilha, agora, tabela.length);
@@ -277,9 +325,14 @@ function atualizarControleVibra() {
     if (novos.length) {
       abaLocais.getRange(abaLocais.getLastRow() + 1, 1, novos.length, CABECALHO_LOCAIS.length).setValues(novos);
     }
+    const importadas = Object.keys(lerImportacao(valoresImportacao)).length;
+    if (importadas && abaImportacao.getLastRow() > 1) {  // usada: limpa os dados, fica o cabeçalho
+      abaImportacao.getRange(2, 1, abaImportacao.getLastRow() - 1, abaImportacao.getLastColumn()).clearContent();
+    }
     planilha.toast(
       `${tabela.length} NFs atualizadas a partir do CIGAM.` +
-      (novos.length ? ` ${novos.length} local(is) de entrega novo(s) na aba "${ABA_LOCAIS}" para preencher.` : ''),
+      (novos.length ? ` ${novos.length} local(is) de entrega novo(s) na aba "${ABA_LOCAIS}".` : '') +
+      (importadas ? ` ${importadas} NF(s) completadas pela aba "${ABA_IMPORTACAO}".` : ''),
       'Controle Vibra', 10);
   } finally {
     trava.releaseLock();
@@ -450,13 +503,41 @@ function ajustarFiltro_(aba, ultimaLinhaNf) {
  * fórmulas, filtros, formatos e mesclagens das colunas da direita. */
 function migrarLayout_(aba) {
   const linhaCabecalho = PRIMEIRA_LINHA_DADOS - 1;
-  const cabecalho = aba.getRange(linhaCabecalho, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
-  if (cabecalho.indexOf('NF de remessa') >= 0) return;
-  const local = cabecalho.indexOf('Local de entrega (nº)');
-  if (local < 0) return;
-  aba.insertColumnAfter(local + 1);
-  aba.getRange(linhaCabecalho, local + 2).setValue('NF de remessa');
-  aba.setColumnWidth(local + 2, 95);
+  const cabecalho = () => aba.getRange(linhaCabecalho, 1, 1, aba.getLastColumn()).getDisplayValues()[0];
+  // coluna nova logo depois de `depoisDe`, se ainda não existe
+  const garantir = (nome, depoisDe, largura) => {
+    const atual = cabecalho();
+    const posicao = atual.indexOf(depoisDe);
+    if (atual.indexOf(nome) >= 0 || posicao < 0) return;
+    aba.insertColumnAfter(posicao + 1);
+    aba.getRange(linhaCabecalho, posicao + 2).setValue(nome);
+    aba.setColumnWidth(posicao + 2, largura);
+  };
+  garantir('NF de remessa', 'Local de entrega (nº)', 95);
+  // colunas da planilha do operacional, no bloco da Emissão
+  garantir('NF comodato Vibra', 'Status entrega', 120);
+  garantir('Situação NF assinada', 'NF comodato Vibra', 200);
+}
+
+/** Aba Listas: status de entrega com a próxima ação (lista suspensa e
+ * VLOOKUP da coluna Próxima ação) e o significado dos status financeiros. */
+function escreverListas_(planilha) {
+  const listas = planilha.getSheetByName(ABA_LISTAS) || planilha.insertSheet(ABA_LISTAS);
+  const valores = valoresAbaListas();
+  listas.getRange(1, 1, Math.max(listas.getMaxRows(), valores.length), 5).clearContent();
+  listas.getRange(1, 1, valores.length, 5).setValues(valores);
+}
+
+function valoresAbaListas() {
+  const linhas = [['Status entrega', 'Próxima ação (se em aberto)', '', 'Status financeiro', 'O que significa']];
+  const total = Math.max(STATUS_ENTREGA_ACAO.length, SIGNIFICADO_STATUS.length);
+  for (let i = 0; i < total; i++) {
+    const entrega = STATUS_ENTREGA_ACAO[i] || ['', ''];
+    const status = SIGNIFICADO_STATUS[i] || ['', ''];
+    linhas.push([entrega[0], entrega[1], '', status[0], status[1]]);
+  }
+  for (let i = 0; i < 3; i++) linhas.push(['', '', '', '', '']);
+  return linhas;
 }
 
 function atualizarFontes_(planilha, agora, linhas) {
@@ -702,8 +783,30 @@ function locaisSemCadastro(tabela, locais) {
     });
 }
 
-function mesclarManuais(selecionado, manuais, locais) {
+/** {chave: {coluna manual: valor}} da aba Importar operacional. */
+function lerImportacao(valoresAba) {
+  const indice = (valoresAba || []).slice(0, 10).findIndex(l => l && texto_(l[0]) === 'NF');
+  if (indice < 0) return {};
+  const cabecalho = valoresAba[indice].map(texto_);
+  const serie = cabecalho.indexOf('Série');
+  if (serie < 0) return {};
+  const colunas = COLUNAS_MANUAIS.concat(['Nº Pedido Vibra']).filter(nome => cabecalho.indexOf(nome) >= 0);
+  const importados = {};
+  valoresAba.slice(indice + 1).forEach(linha => {
+    if (!linha || !texto_(linha[0])) return;
+    const valores = {};
+    colunas.forEach(nome => {
+      const valor = linha[cabecalho.indexOf(nome)];
+      if (texto_(valor)) valores[nome] = valor instanceof Date ? valor : texto_(valor);
+    });
+    if (Object.keys(valores).length) importados[chaveNf(linha[0], texto_(linha[serie]))] = valores;
+  });
+  return importados;
+}
+
+function mesclarManuais(selecionado, manuais, locais, importados) {
   locais = locais || {};
+  importados = importados || {};
   return selecionado.map(original => {
     const linha = Object.assign({}, original);
     COLUNAS_MANUAIS.forEach(nome => { linha[nome] = ''; });
@@ -712,10 +815,16 @@ function mesclarManuais(selecionado, manuais, locais) {
       linha['Status entrega'] = statusEntregaInicial(linha);
     } else {
       COLUNAS_MANUAIS.forEach(nome => { linha[nome] = anterior[nome] === undefined ? '' : anterior[nome]; });
+      const status = linha['Status entrega'];
+      if (MIGRACAO_STATUS_ENTREGA[status]) linha['Status entrega'] = MIGRACAO_STATUS_ENTREGA[status];
       if (!linha['Nº Pedido Vibra'] && anterior['Nº Pedido Vibra']) {
         linha['Nº Pedido Vibra'] = anterior['Nº Pedido Vibra'];
       }
     }
+    const importado = importados[chaveNf(linha['NF'], linha['Série'])] || {};
+    Object.keys(importado).forEach(nome => {
+      if (!texto_(linha[nome])) linha[nome] = importado[nome];
+    });
     const cliente = locais[chaveLocal(linha['Filial Vibra (CNPJ)'], linha['Local de entrega (nº)'])] || '';
     linha[COLUNA_CLIENTE_FINAL] = cliente;
     const digitado = anterior ? anterior[COLUNA_CLIENTE_FINAL_DIGITADO] || '' : '';
@@ -727,10 +836,10 @@ function mesclarManuais(selecionado, manuais, locais) {
   });
 }
 
-function montarTabela(linhasDw, valoresAba, desde, valoresLocais) {
+function montarTabela(linhasDw, valoresAba, desde, valoresLocais, valoresImportacao) {
   const manuais = lerPreenchimentoManual(valoresAba);
   return mesclarManuais(selecionarLinhas(montarControle(linhasDw), manuais, desde), manuais,
-    lerLocaisEntrega(valoresLocais));
+    lerLocaisEntrega(valoresLocais), lerImportacao(valoresImportacao));
 }
 
 /** Linhas A a S prontas pro setValues: texto que a planilha não deve

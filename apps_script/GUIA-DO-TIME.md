@@ -22,11 +22,11 @@ A linha 1 mostra, em cada bloco de colunas, quem cuida dele.
 |---|---|---|
 | A a O | **Do CIGAM**: NF, série, emissão, vencimento, valor, saldo, nº do pedido, filial Vibra, tipo, material, status financeiro, data de pagamento, NF de devolução, nº do local de entrega, **NF de remessa** | O script. **Não edite**: tudo é reescrito na próxima atualização. Exceção: o **nº do pedido (G)** pode ser digitado quando está em branco (ver abaixo). |
 | P | **Cliente final** | Fórmula. Vem da aba **Locais de entrega** (ver abaixo). |
-| Q a S | **Emissão preenche**: status entrega, data da entrega / NF assinada, obs. Emissão | Emissão |
-| T | **Financeiro preenche**: obs. financeiro | Financeiro |
-| U e V | **Automático**: dias em atraso, próxima ação | Fórmulas |
+| Q a U | **Emissão preenche**: status entrega, NF comodato Vibra, situação da NF assinada, data da entrega / NF assinada, obs. Emissão | Emissão / operacional |
+| V | **Financeiro preenche**: obs. financeiro | Financeiro |
+| W e X | **Automático**: dias em atraso, próxima ação | Fórmulas |
 
-O que o time escreve em Q a T fica preso à NF (número + série): pode reordenar
+O que o time escreve em Q a V fica preso à NF (número + série): pode reordenar
 ou filtrar à vontade que, na atualização, cada informação volta pra linha
 certa.
 
@@ -62,35 +62,58 @@ Calculado pelo script a partir do título no CIGAM:
 
 ## Status de entrega e próxima ação
 
-A Emissão escolhe o **Status entrega** (coluna Q) na lista suspensa. A
-**Próxima ação** (coluna V) se ajusta sozinha:
+O **Status entrega** (coluna Q) segue a esteira do operacional: entrega,
+instalação e o **comodato da Vibra** assinado pelo cliente final. O Financeiro
+só cobra a Vibra depois do comodato assinado. A **Próxima ação** (coluna X) se
+ajusta sozinha:
 
 | Status entrega | Próxima ação (se a NF está em aberto) |
 |---|---|
 | A validar | Emissão: confirmar entrega |
-| Aguardando entrega | Emissão: acompanhar entrega |
-| Aguardando NF assinada | Emissão: obter NF assinada |
+| Não entregue | Emissão: acompanhar entrega |
+| Não instalado | Emissão: acompanhar instalação |
+| Não instalado, comodato assinado | Financeiro: cobrar Vibra |
+| Aguardando comodato da Vibra | Emissão: cobrar comodato da Vibra |
+| Aguardando cliente assinar comodato | Emissão: obter assinatura do comodato |
+| Comodato assinado | Financeiro: cobrar Vibra |
 | Problema na entrega | Emissão: resolver entrega |
-| NF assinada recebida | Financeiro: cobrar Vibra |
 | Não se aplica | Financeiro: cobrar Vibra |
+
+Ao lado do status, o operacional anota a **NF comodato Vibra** (coluna R, a NF
+que a própria Vibra emite em comodato para o cliente final; não vem do CIGAM)
+e a **Situação NF assinada** (coluna S, ex.: "Enviadas 19/10", "Vamos coletar
+no dia da instalação").
 
 - NF nova e em aberto entra como **A validar**. Serviço e mensalidade entram
   como **Não se aplica**.
 - NF paga, devolvida, cancelada etc. mostra **Encerrada** e fica em cinza.
 - NF em aberto com o status de entrega em branco mostra a próxima ação
   "Preencher status entrega", em vermelho.
-- As opções da lista ficam na aba **Listas**. Para criar uma nova, acrescente
-  lá com a próxima ação correspondente.
+- As opções da lista ficam na aba **Listas**, que o script regrava a cada
+  atualização (a lista é a mesma do script). Para mudar uma etapa, ajuste o
+  `ControleVibra.gs` e o `controle_vibra.py`.
 
-## NF de remessa (a que o cliente final assina)
+## NF de remessa e NF de comodato
 
-Nas vendas triangulares saem duas NFs no mesmo dia: a **NF da Vibra** (venda à
-ordem, CFOP 6119/6118), que só fatura, e a **NF de remessa** (remessa por conta
-e ordem, CFOP 6923/5923), que vai com o material para o cliente final. É a NF
-de remessa que o cliente final recebe e assina: a coluna **O** mostra o número
-dela, vindo do CIGAM (ex.: NF Vibra 25263, remessa 25265 para a Ferbasa
-Pojuca). Mensalidade, serviço e venda direta não têm remessa: a coluna fica em
-branco.
+Nas vendas triangulares saem duas NFs nossas no mesmo dia: a **NF da Vibra**
+(venda à ordem, CFOP 6119/6118), que só fatura, e a **NF de remessa** (remessa
+por conta e ordem, CFOP 6923/5923), que vai com o material para o cliente
+final. A coluna **O** mostra o número da remessa, vindo do CIGAM (ex.: NF Vibra
+25263, remessa 25265 para a Ferbasa Pojuca). Mensalidade, serviço e venda
+direta não têm remessa: a coluna fica em branco.
+
+A assinatura que libera a cobrança é a do **comodato**: a NF que a **própria
+Vibra** emite em comodato para o cliente final. Ela não passa pelo nosso CIGAM:
+o operacional anota o número na coluna **R** (NF comodato Vibra).
+
+## Trazer anotações do operacional (aba "Importar operacional")
+
+Para trazer de uma vez o que foi anotado fora do controle (como a planilha
+NFs_VIBRA do operacional), use a aba **Importar operacional**: linha 1 com
+**NF**, **Série** e colunas com o mesmo nome das colunas do controle (ex.: NF
+comodato Vibra, Situação NF assinada, Status entrega, Obs. Emissão, Nº Pedido
+Vibra). Na próxima atualização o script preenche **só o que está em branco** no
+controle e depois limpa a aba (fica o cabeçalho).
 
 ## Cliente final e aba "Locais de entrega"
 
@@ -122,11 +145,11 @@ hora; um aviso no canto da tela mostra quantas NFs ficaram e o valor. A linha
 | Opção | Mostra |
 |---|---|
 | Todas as NFs | Tira o filtro e mostra todas as colunas |
-| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) e entregues (NF assinada recebida ou "Não se aplica"), **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (NF de remessa), P (cliente final), T (obs. financeiro) e U (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
+| **Atualizar o controle da Vibra** | Em aberto (ou pago parcial) com material entregue (qualquer etapa depois da entrega) ou "Não se aplica", **só com as colunas** A (NF), C (emissão), D (vencimento), F (saldo), G (pedido), H (filial), I (tipo), J (material), O (NF de remessa), P (cliente final), R (NF comodato Vibra), S (situação NF assinada), V (obs. financeiro) e W (dias em atraso). As outras colunas ficam ocultas até escolher outra opção |
 | Pendentes de pagamento | Todos os títulos em aberto ou pagos em parte, com ou sem entrega confirmada |
-| Pendentes entregues | Em aberto ou pago parcial, com entrega concluída (NF assinada recebida) ou "Não se aplica": o que já pode ser cobrado |
+| Pendentes entregues | Em aberto ou pago parcial, com material entregue (qualquer etapa depois da entrega) ou "Não se aplica". Cobrar só os que estão com a próxima ação "Financeiro: cobrar Vibra" (comodato assinado) |
 | Pendentes entregues em atraso | Os de cima com vencimento já passado |
-| Aguardando a Emissão | Em aberto com entrega ainda não confirmada (a validar, aguardando, problema ou em branco). Esconde as colunas B, C, D, E, H, K, L, M e N (série, emissão, vencimento, valor, filial, status financeiro, data de pagamento, NF de devolução e nº do local) até escolher outra opção |
+| Aguardando a Emissão | Entrega, instalação ou comodato ainda pendentes, inclusive de NF já paga (como na planilha do operacional); só sai NF cancelada, devolvida ou baixada. Esconde as colunas B, C, D, E, H, K, L, M e N (série, emissão, vencimento, valor, filial, status financeiro, data de pagamento, NF de devolução e nº do local) até escolher outra opção |
 | Pagos | Todas as NFs com status Pago |
 | Pagos no período | Pagas entre as datas de **E1** ("de") e **F1** ("até"), pela data de pagamento (coluna L). Sem datas, usa o mês atual. Mudou a data, o filtro se refaz |
 | Canceladas / devolvidas | Canceladas, devolvidas, abatidas e baixas por perda |
@@ -154,19 +177,19 @@ Cuidados:
 
 ## Rotina sugerida
 
-- **Emissão**: filtro **Aguardando a Emissão**. Para cada NF, atualize o
-  status de entrega (Q). Quando a NF de remessa (coluna O) assinada chegar,
-  marque **NF assinada recebida** e informe a data (R). Detalhes vão em
-  Obs. Emissão (S).
-- **Financeiro**: filtro **Pendentes entregues em atraso** para cobrar a
-  Vibra, **Pendentes de pagamento** para a visão de tudo que está em aberto e
+- **Emissão / operacional**: filtro **Aguardando a Emissão**. Para cada NF,
+  avance o status de entrega (Q) na esteira, anote a NF comodato da Vibra (R)
+  e a situação da NF assinada (S). Quando o comodato voltar assinado, marque
+  **Comodato assinado** e informe a data (T). Detalhes vão em Obs. Emissão (U).
+- **Financeiro**: filtro **Pendentes entregues em atraso**, cobrando a Vibra
+  nas NFs com a próxima ação "Financeiro: cobrar Vibra" (comodato assinado); **Pendentes de pagamento** para a visão de tudo que está em aberto e
   **Pagos no período** para conferir os recebimentos. Anotações em
-  Obs. financeiro (T).
+  Obs. financeiro (V).
 
 ## Dúvidas comuns
 
 - **Escrevi em uma coluna de A a O e sumiu.** Essas colunas são reescritas a
-  cada atualização. Use as colunas de observação (S ou T). A exceção é o nº do
+  cada atualização. Use as colunas de observação (U ou V). A exceção é o nº do
   pedido (G): digitado numa NF em que ele está em branco, ele é mantido.
 - **O nº do pedido da Vibra está na NF, mas a coluna G está em branco.** O
   script só acha o pedido quando ele está escrito na descrição de algum item

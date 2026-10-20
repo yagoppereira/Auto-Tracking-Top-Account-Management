@@ -30,9 +30,13 @@ service account: basta a pessoa conseguir rodar consultas no projeto
 ## Usar
 
 - **Controle Vibra > Atualizar agora**: reescreve as colunas A a O a partir do
-  CIGAM (O = NF de remessa da venda triangular) e preserva as colunas Q a T
+  CIGAM (O = NF de remessa da venda triangular) e preserva as colunas Q a V
   preenchidas pelo time. Numa planilha anterior à coluna "NF de remessa", a
-  primeira atualização insere a coluna depois do local de entrega.
+  primeira atualização insere a coluna depois do local de entrega; numa
+  anterior às colunas do operacional, insere "NF comodato Vibra" e "Situação
+  NF assinada" depois do Status entrega. A aba **Listas** é regravada a cada
+  atualização com as etapas do script, e a aba **Importar operacional**, se
+  tiver dados, completa o que está em branco e é limpa.
 - A coluna P (**Cliente final**) é fórmula: procura a filial Vibra + o nº do
   "Local de Entrega" da aba Transporte da NF no CIGAM na aba **Locais de
   entrega**. Para corrigir ou cadastrar um cliente final, edite só lá: todas
@@ -50,7 +54,7 @@ service account: basta a pessoa conseguir rodar consultas no projeto
   O filtro é o filtro comum da aba, igual pra todo mundo que está com a
   planilha aberta; **Todas as NFs** tira o filtro. **Atualizar o controle da
   Vibra** (em aberto e entregues) também oculta as colunas fora de A, C, D,
-  F, G, H, I, J, O, P, T e U; qualquer outra opção mostra todas de novo.
+  F, G, H, I, J, O, P, R, S, V e W; qualquer outra opção mostra todas de novo.
 - **Controle Vibra > Baixar em Excel o que está na tela** (ou o botão no
   painel): gera um `.xlsx` com o cabeçalho, as NFs visíveis no filtro, as
   colunas visíveis e a linha de totais. O arquivo é montado no próprio script
@@ -69,7 +73,7 @@ SUBTOTAL, que só conta as linhas visíveis no filtro. O filtro da aba vai até 
 script move a linha, ajusta o filtro e reaplica o filtro rápido de A1.
 
 O script só grava valores: a formatação, as listas suspensas e as fórmulas das
-colunas P, U e V (linha 2) já estão na planilha. Para refazer a formatação do
+colunas P, W e X (linha 2) já estão na planilha. Para refazer a formatação do
 zero, rode o extrator em Python (`controle_vibra.py`), que reaplica o layout.
 
 ## Erros comuns

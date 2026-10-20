@@ -51,6 +51,10 @@ ABA_RESUMO = "Resumo"
 ABA_LISTAS = "Listas"
 ABA_FONTES = "Fontes"
 ABA_LOCAIS = "Locais de entrega"
+# aba opcional pra trazer pra dentro do controle o que o operacional anotou
+# fora dele (NF, Série + colunas com o nome das colunas manuais): preenche
+# só o que está em branco no controle e é limpa depois de usada
+ABA_IMPORTACAO = "Importar operacional"
 
 # Vibra Energia é reconhecida pela raiz do CNPJ, não pela divisão do
 # cadastro: das 6 filiais com raiz 34274233 só uma está na divisão
@@ -87,15 +91,33 @@ SIGNIFICADO_STATUS = [
     (STATUS_SEM_TITULO, "NF confirmada sem título a receber no DW (o DW atualiza com até 1 dia de atraso)."),
 ]
 
-# --- status de entrega (coluna O, preenchido pela Emissão) -------------------
+# --- status de entrega (preenchido pela Emissão/operacional) ------------------
+# esteira do operacional: entrega -> instalação -> comodato da Vibra assinado
+# pelo cliente final. O Financeiro só cobra a Vibra com o comodato assinado.
 STATUS_ENTREGA_ACAO = [
     ("A validar", "Emissão: confirmar entrega"),
-    ("Aguardando entrega", "Emissão: acompanhar entrega"),
-    ("Aguardando NF assinada", "Emissão: obter NF assinada"),
+    ("Não entregue", "Emissão: acompanhar entrega"),
+    ("Não instalado", "Emissão: acompanhar instalação"),
+    ("Não instalado, comodato assinado", "Financeiro: cobrar Vibra"),
+    ("Aguardando comodato da Vibra", "Emissão: cobrar comodato da Vibra"),
+    ("Aguardando cliente assinar comodato", "Emissão: obter assinatura do comodato"),
+    ("Comodato assinado", "Financeiro: cobrar Vibra"),
     ("Problema na entrega", "Emissão: resolver entrega"),
-    ("NF assinada recebida", "Financeiro: cobrar Vibra"),
     ("Não se aplica", "Financeiro: cobrar Vibra"),
 ]
+# material já entregue (base dos filtros "entregues" e da visão da Vibra)
+STATUS_ENTREGUES = ["Não instalado", "Não instalado, comodato assinado", "Aguardando comodato da Vibra",
+                    "Aguardando cliente assinar comodato", "Comodato assinado", "Não se aplica"]
+# ainda tem etapa do operacional (filtro "Aguardando a Emissão")
+STATUS_PENDENTES_OPERACIONAL = ["A validar", "Não entregue", "Não instalado", "Não instalado, comodato assinado",
+                                "Aguardando comodato da Vibra", "Aguardando cliente assinar comodato",
+                                "Problema na entrega"]
+# status da lista anterior -> etapa equivalente da esteira
+MIGRACAO_STATUS_ENTREGA = {
+    "Aguardando entrega": "Não entregue",
+    "Aguardando NF assinada": "Aguardando cliente assinar comodato",
+    "NF assinada recebida": "Comodato assinado",
+}
 ACAO_SEM_TITULO = "Financeiro: conferir título no CIGAM"
 ACAO_SEM_STATUS = "Preencher status entrega"
 ACAO_ENCERRADA = "Encerrada"
@@ -114,7 +136,8 @@ COLUNAS_INTERNAS = ["_cliente_remessa", "_codigo_remessa"]
 # Locais de entrega), pra que um local cadastrado lá apareça na hora em
 # todas as NFs, sem depender de rodar o extrator nem de alguém digitar
 COLUNA_CLIENTE_FINAL = "Cliente final"
-COLUNAS_EMISSAO = ["Status entrega", "Data entrega / NF assinada", "Obs. Emissão"]
+COLUNAS_EMISSAO = ["Status entrega", "NF comodato Vibra", "Situação NF assinada", "Data entrega / NF assinada",
+                   "Obs. Emissão"]
 COLUNAS_FINANCEIRO = ["Obs. financeiro"]
 COLUNAS_MANUAIS = COLUNAS_EMISSAO + COLUNAS_FINANCEIRO
 COLUNAS_FORMULA = ["Dias em atraso", "Próxima ação"]
@@ -605,13 +628,41 @@ def locais_sem_cadastro(tabela: pd.DataFrame, locais: dict) -> list:
     return linhas
 
 
-def mesclar_manuais(selecionado: pd.DataFrame, manuais: dict, locais: dict = None) -> pd.DataFrame:
+def ler_importacao(valores_aba: list) -> dict:
+    """{(nf, série): {coluna manual: valor}} da aba Importar operacional.
+    Acha o cabeçalho pela linha cuja primeira célula é "NF"; só lê colunas
+    com o nome de uma coluna manual ou do nº do pedido."""
+    indice = next((i for i, linha in enumerate(valores_aba[:10] if valores_aba else [])
+                   if linha and _str(linha[0]) == "NF"), None)
+    if indice is None:
+        return {}
+    cabecalho = [_str(c) for c in valores_aba[indice]]
+    if "Série" not in cabecalho:
+        return {}
+    serie = cabecalho.index("Série")
+    colunas = {nome: cabecalho.index(nome) for nome in COLUNAS_MANUAIS + ["Nº Pedido Vibra"] if nome in cabecalho}
+    importados = {}
+    for linha in valores_aba[indice + 1:]:
+        if not linha or not _str(linha[0]):
+            continue
+        celula = lambda pos: _str(linha[pos]) if pos < len(linha) else ""
+        valores = {nome: celula(pos) for nome, pos in colunas.items() if celula(pos)}
+        if valores:
+            importados[chave_nf(linha[0], celula(serie))] = valores
+    return importados
+
+
+def mesclar_manuais(selecionado: pd.DataFrame, manuais: dict, locais: dict = None,
+                    importados: dict = None) -> pd.DataFrame:
     """Põe as colunas manuais de volta em cada NF. O nº do pedido digitado à
     mão só vale quando o DW não achou nenhum no texto da NF. O cliente final
     vem da aba Locais de entrega (na planilha é fórmula; aqui serve pra
     prévia do app). Cliente final digitado no layout anterior que não bate
-    com a aba Locais vai pra Obs. Emissão, pra não se perder."""
+    com a aba Locais vai pra Obs. Emissão, pra não se perder. Status de
+    entrega da lista anterior vira a etapa equivalente da esteira. O que vem
+    da aba Importar operacional só preenche o que está em branco."""
     locais = locais or {}
+    importados = importados or {}
     resultado = selecionado.copy()
     for nome in COLUNAS_MANUAIS:
         resultado[nome] = ""
@@ -622,8 +673,15 @@ def mesclar_manuais(selecionado: pd.DataFrame, manuais: dict, locais: dict = Non
             continue
         for nome in COLUNAS_MANUAIS:
             resultado.at[indice, nome] = anterior.get(nome, "")
+        status = anterior.get("Status entrega", "")
+        resultado.at[indice, "Status entrega"] = MIGRACAO_STATUS_ENTREGA.get(status, status)
         if not linha["Nº Pedido Vibra"] and anterior.get("Nº Pedido Vibra"):
             resultado.at[indice, "Nº Pedido Vibra"] = anterior["Nº Pedido Vibra"]
+    for indice, linha in resultado.iterrows():
+        importado = importados.get(chave_nf(linha["NF"], linha["Série"]), {})
+        for nome, valor in importado.items():
+            if not _str(linha[nome]):
+                resultado.at[indice, nome] = valor
     resultado[COLUNA_CLIENTE_FINAL] = ""
     for indice, linha in resultado.iterrows():
         cliente = locais.get(chave_local(linha["Filial Vibra (CNPJ)"], linha["Local de entrega (nº)"]), "")
@@ -878,7 +936,7 @@ LARGURAS = {
     "NF": 70, "Série": 50, "Emissão": 90, "Vencimento": 90, "Valor (R$)": 110, "Saldo em aberto (R$)": 120,
     "Nº Pedido Vibra": 115, "Filial Vibra (CNPJ)": 150, "Tipo de NF": 140, "Material": 320,
     "Status financeiro": 120, "Data pagamento / baixa": 110, "NF de devolução": 95, "Local de entrega (nº)": 80,
-    "NF de remessa": 95,
+    "NF de remessa": 95, "NF comodato Vibra": 120, "Situação NF assinada": 200,
     COLUNA_CLIENTE_FINAL: 250, "Status entrega": 170, "Data entrega / NF assinada": 120,
     "Obs. Emissão": 220, "Obs. financeiro": 300, "Dias em atraso": 80, "Próxima ação": 210,
 }
@@ -982,7 +1040,7 @@ def requests_formatacao_controle(sheet_id: int, total_linhas: int, regras_condic
                             "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"))
     req.append(_formato(dados(idx["Série"], idx["Série"] + 1), {"horizontalAlignment": "CENTER"},
                         "userEnteredFormat.horizontalAlignment"))
-    for nome in ("Material", COLUNA_CLIENTE_FINAL, "Obs. Emissão", "Obs. financeiro"):
+    for nome in ("Material", COLUNA_CLIENTE_FINAL, "Situação NF assinada", "Obs. Emissão", "Obs. financeiro"):
         req.append(_formato(dados(idx[nome], idx[nome] + 1), {"wrapStrategy": "WRAP"},
                             "userEnteredFormat.wrapStrategy"))
 
@@ -1134,6 +1192,15 @@ def agora() -> datetime:
     return datetime.now(FUSO).replace(tzinfo=None)
 
 
+def _aba_se_existir(planilha, titulo: str):
+    import gspread
+
+    try:
+        return planilha.worksheet(titulo)
+    except gspread.WorksheetNotFound:
+        return None
+
+
 def _obter_ou_criar_aba(planilha, titulo: str, linhas: int, colunas: int):
     import gspread
 
@@ -1147,14 +1214,14 @@ def _obter_ou_criar_aba(planilha, titulo: str, linhas: int, colunas: int):
 
 
 def preparar_controle(client_bq, valores_aba_atual: list, desde: date = DESDE_PADRAO,
-                      valores_locais: list = None) -> pd.DataFrame:
+                      valores_locais: list = None, valores_importacao: list = None) -> pd.DataFrame:
     """Consulta o DW, aplica as regras e devolve a tabela final (DW +
     colunas manuais), sem gravar nada. Usado pela prévia do app e pela
     sincronização."""
     manuais = ler_preenchimento_manual(valores_aba_atual)
     controle = montar_controle(buscar_notas_vibra(client_bq))
     return mesclar_manuais(selecionar_linhas(controle, manuais, desde), manuais,
-                           ler_locais_entrega(valores_locais or []))
+                           ler_locais_entrega(valores_locais or []), ler_importacao(valores_importacao or []))
 
 
 def sincronizar_planilha(client_bq, gc, planilha_id: str = PLANILHA_ID_PADRAO, desde: date = DESDE_PADRAO,
@@ -1170,7 +1237,9 @@ def sincronizar_planilha(client_bq, gc, planilha_id: str = PLANILHA_ID_PADRAO, d
     if not ler_locais_entrega(valores_locais) and not any(any(c for c in l) for l in valores_locais):
         locais_aba.update(values=[CABECALHO_LOCAIS], range_name="A1", value_input_option="USER_ENTERED")
         valores_locais = [CABECALHO_LOCAIS]
-    tabela = preparar_controle(client_bq, aba.get_all_values(), desde, valores_locais)
+    importacao_aba = _aba_se_existir(planilha, ABA_IMPORTACAO)
+    valores_importacao = importacao_aba.get_all_values() if importacao_aba else []
+    tabela = preparar_controle(client_bq, aba.get_all_values(), desde, valores_locais, valores_importacao)
     atualizado_em = agora()
 
     valores = valores_aba_controle(tabela, atualizado_em)
@@ -1207,6 +1276,8 @@ def sincronizar_planilha(client_bq, gc, planilha_id: str = PLANILHA_ID_PADRAO, d
     novos_locais = locais_sem_cadastro(tabela, ler_locais_entrega(valores_locais))
     if novos_locais:
         locais_aba.append_rows(novos_locais, value_input_option="USER_ENTERED")
+    if ler_importacao(valores_importacao):  # usada: limpa os dados, fica o cabeçalho
+        importacao_aba.batch_clear([f"A2:Z{max(importacao_aba.row_count, 2)}"])
 
     return {
         "linhas": len(tabela),

@@ -22,15 +22,13 @@
  * planilha aberta.
  */
 
-// status de entrega (coluna Status entrega) que liberam a cobrança
-const ENTREGA_CONCLUIDA = ['NF assinada recebida', 'Não se aplica'];
-
 // visão "Atualizar o controle da Vibra": só as colunas que interessam pra
-// atualizar o controle (A, C, D, F, G, H, I, J, O, P, T e U). Achadas pelo nome
-// do cabeçalho; as outras ficam ocultas até escolher outro filtro.
+// atualizar o controle (A, C, D, F, G, H, I, J, O, P, R, S, V e W). Achadas pelo
+// nome do cabeçalho; as outras ficam ocultas até escolher outro filtro.
 const COLUNAS_CONTROLE_VIBRA = [
   'NF', 'Emissão', 'Vencimento', 'Saldo em aberto (R$)', 'Nº Pedido Vibra', 'Filial Vibra (CNPJ)',
-  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'Obs. financeiro', 'Dias em atraso',
+  'Tipo de NF', 'Material', 'NF de remessa', 'Cliente final', 'NF comodato Vibra', 'Situação NF assinada',
+  'Obs. financeiro', 'Dias em atraso',
 ];
 
 // visão da Emissão ("Aguardando a Emissão"): esconde o que não ajuda a
@@ -47,7 +45,7 @@ const FILTROS_VIBRA = {
     colunas: COLUNAS_CONTROLE_VIBRA,
     condicoes: () => [
       { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
-      { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
+      { coluna: 'Status entrega', em: STATUS_ENTREGUES },
     ],
   },
   pendentes_pagamento: {
@@ -57,10 +55,10 @@ const FILTROS_VIBRA = {
   },
   pendentes_entregues: {
     rotulo: 'Pendentes entregues',
-    titulo: 'Pendentes de pagamento entregues (ou não se aplica)',
+    titulo: 'Pendentes de pagamento com material entregue (ou não se aplica)',
     condicoes: () => [
       { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
-      { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
+      { coluna: 'Status entrega', em: STATUS_ENTREGUES },
     ],
   },
   pendentes_entregues_atraso: {
@@ -68,17 +66,19 @@ const FILTROS_VIBRA = {
     titulo: 'Pendentes de pagamento entregues e vencidos',
     condicoes: () => [
       { coluna: 'Status financeiro', em: [STATUS_EM_ABERTO, STATUS_PAGO_PARCIAL] },
-      { coluna: 'Status entrega', em: ENTREGA_CONCLUIDA },
+      { coluna: 'Status entrega', em: STATUS_ENTREGUES },
       { coluna: 'Dias em atraso', acimaDe: 0 },
     ],
   },
   aguardando_emissao: {
     rotulo: 'Aguardando a Emissão',
-    titulo: 'Em aberto aguardando a Emissão (entrega não confirmada)',
+    titulo: 'Aguardando a Emissão (entrega, instalação ou comodato pendente)',
     ocultas: COLUNAS_OCULTAS_EMISSAO,
+    // como na planilha do operacional: segue até o comodato assinado mesmo
+    // depois de a Vibra pagar; só sai NF cancelada, devolvida ou baixada
     condicoes: () => [
-      { coluna: 'Status financeiro', em: STATUS_ABERTOS },
-      { coluna: 'Status entrega', foraDe: ENTREGA_CONCLUIDA },
+      { coluna: 'Status entrega', em: STATUS_PENDENTES_OPERACIONAL },
+      { coluna: 'Status financeiro', foraDe: [STATUS_CANCELADA, STATUS_DEVOLVIDA, STATUS_ABATIDA, STATUS_PERDA] },
     ],
   },
   pagos: {
@@ -632,14 +632,14 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 <body>
   <button class="excel" onclick="baixarExcel()">⬇ Baixar em Excel o que está na tela</button>
   <button class="filtro especial" onclick="aplicar('controle_vibra')">Atualizar o controle da Vibra
-    <small>Em aberto e entregues (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, P, T e U.
+    <small>Em aberto com material entregue (ou não se aplica), só com as colunas A, C, D, F, G, H, I, J, O, P, R, S, V e W.
     Escolha outro filtro ou "Mostrar todas" para voltar as colunas</small></button>
 
   <h3>Financeiro</h3>
   <button class="filtro" onclick="aplicar('pendentes_pagamento')">Pendentes de pagamento
     <small>Todos os títulos em aberto ou pagos em parte</small></button>
   <button class="filtro" onclick="aplicar('pendentes_entregues')">Pendentes entregues
-    <small>Em aberto com entrega confirmada (NF assinada recebida) ou não se aplica: já podem ser cobrados</small></button>
+    <small>Em aberto com material entregue (qualquer etapa depois da entrega) ou não se aplica. A cobrança só depois do comodato assinado (coluna Próxima ação)</small></button>
   <button class="filtro" onclick="aplicar('pendentes_entregues_atraso')">Pendentes entregues em atraso
     <small>Os de cima com vencimento já passado</small></button>
   <button class="filtro" onclick="aplicar('pagos')">Pagos
@@ -658,7 +658,7 @@ const HTML_PAINEL_FILTROS = `<!DOCTYPE html>
 
   <h3>Emissão</h3>
   <button class="filtro" onclick="aplicar('aguardando_emissao')">Aguardando a Emissão
-    <small>Em aberto e entrega ainda não confirmada (a validar, aguardando, problema ou em branco).
+    <small>Entrega, instalação ou comodato pendentes, mesmo de NF já paga (como na planilha do operacional).
     Esconde as colunas B, C, D, E, H, K, L, M e N</small></button>
 
   <h3>Outros</h3>

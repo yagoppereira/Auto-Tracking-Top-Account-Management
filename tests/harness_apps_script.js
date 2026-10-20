@@ -11,7 +11,7 @@ vm.createContext(contexto);
 const codigo = ['ControleVibra.gs', 'FiltrosVibra.gs']
   .map(nome => fs.readFileSync(__dirname + '/../apps_script/' + nome, 'utf8')).join('\n');
 vm.runInContext(codigo + '\nthis.__api = {montarTabela, linhasParaPlanilha, locaisSemCadastro, lerLocaisEntrega, '
-  + 'SQL_NOTAS_VIBRA, linhaTotal, FILTROS_VIBRA, formulaFiltro, resumirFiltro, OPCOES_FILTRO_RAPIDO, opcaoDoRotulo, '
+  + 'SQL_NOTAS_VIBRA, linhaTotal, valoresAbaListas, FILTROS_VIBRA, formulaFiltro, resumirFiltro, OPCOES_FILTRO_RAPIDO, opcaoDoRotulo, '
   + 'textoResumo, colunasAOcultar, COLUNAS_CONTROLE_VIBRA, partesXlsx, colunasVisiveis};', contexto);
 const api = contexto.__api;
 
@@ -50,9 +50,10 @@ if (entrada.xlsx) {
 } else if (entrada.somente_sql) {
   process.stdout.write(JSON.stringify({ sql: api.SQL_NOTAS_VIBRA }));
 } else {
-  const tabela = api.montarTabela(entrada.linhas, entrada.aba, entrada.desde, entrada.locais || []);
+  const tabela = api.montarTabela(entrada.linhas, entrada.aba, entrada.desde, entrada.locais || [],
+    entrada.importacao || []);
   const linhas = api.linhasParaPlanilha(tabela).map(l => l.map(serializar));
   const total = [',', ';'].map(s => Array.from(api.linhaTotal(tabela.length, s)));
   const novos = api.locaisSemCadastro(tabela, api.lerLocaisEntrega(entrada.locais || []));
-  process.stdout.write(JSON.stringify({ linhas, novos, total }));
+  process.stdout.write(JSON.stringify({ linhas, novos, total, listas: api.valoresAbaListas() }));
 }
